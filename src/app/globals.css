@@ -1,0 +1,63 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Serif+Display:ital@0;1&display=swap');
+
+:root {
+  /* Background & surface */
+  --bg: #F7F6F3;
+  --surface: #FFFFFF;
+  --surface2: #F0EEE9;
+  --border: #D4CFC6;
+
+  /* Text */
+  --text-primary: #1A1916;
+  --text-secondary: #4A4845;
+  --text-tertiary: #7A7770;
+
+  /* Accent */
+  --accent: #2E5BBA;
+  --accent-mid: #4A73CC;
+  --accent-light: #EEF2FB;
+  --accent-border: #C5D4F0;
+
+  /* Semantic colors */
+  --green: #1A7A4A;
+  --green-bg: #EAF5EE;
+  --green-border: #B8DFC8;
+
+  --amber: #8A5C00;
+  --amber-bg: #FEF3DC;
+  --amber-border: #F5D98A;
+
+  --red: #991B1B;
+  --red-bg: #FEE2E2;
+  --red-border: #FECACA;
+
+  /* Brand logos */
+  --google-blue: #4285F4;
+  --google-green: #34A853;
+  --google-yellow: #FBBC05;
+  --google-red: #EA4335;
+  --apple-red: #FF5F57;
+  --apple-yellow: #FEBC2E;
+  --apple-green: #28C840;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  background-color: var(--bg);
+  color: var(--text-primary);
+  font-family: 'DM Sans', sans-serif;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: 'DM Serif Display', serif;
+  margin: 0;
+}
+
+button {
+  font-family: 'DM Sans', sans-serif;
+}

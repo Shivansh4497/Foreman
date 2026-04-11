@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Foreman — Screen Reference v1.0</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Serif+Display:ital@0;1&display=swap');
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+  body{font-family:'DM Sans',sans-serif;background:#1A1916;color:#F7F6F3;padding:32px;}
+  .toc{max-width:800px;margin:0 auto 48px;}
+  .toc h1{font-family:'DM Serif Display',serif;font-size:32px;margin-bottom:8px;color:#F7F6F3;}
+  .toc p{color:#7A7770;font-size:14px;margin-bottom:24px;}
+  .toc-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px;}
+  .toc-item{padding:8px 12px;background:#2A2926;border:1px solid #3A3936;border-radius:6px;font-size:12px;color:#9B9890;}
+  .toc-item a{color:#9B9890;text-decoration:none;}
+  .toc-item a:hover{color:#F7F6F3;}
+  .screen-block{max-width:1200px;margin:0 auto 64px;}
+  .screen-label{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.8px;color:#5A5A55;margin-bottom:6px;padding-left:2px;}
+  .screen-title{font-family:'DM Serif Display',serif;font-size:22px;color:#F7F6F3;margin-bottom:4px;}
+  .screen-desc{font-size:13px;color:#7A7770;margin-bottom:16px;}
+  .screen-frame{border:1px solid #3A3936;border-radius:12px;overflow:hidden;background:#F7F6F3;}
+  .screen-frame iframe{width:100%;border:none;display:block;}
+  :root{
+    --bg:#F7F6F3;--surface:#FFFFFF;--surface2:#F0EEE9;--border:#D4CFC6;
+    --text-primary:#1A1916;--text-secondary:#4A4845;--text-tertiary:#7A7770;
+    --accent:#2E5BBA;--accent-light:#EEF2FB;--accent-mid:#4A73CC;
+    --green:#1A7A4A;--green-bg:#EAF5EE;--green-border:#B8DFC8;
+    --amber:#8A5C00;--amber-bg:#FEF3DC;--amber-border:#F5D98A;
+    --red:#991B1B;--red-bg:#FEE2E2;--red-border:#FECACA;
+  }
+  /* Shared component styles used in all inline screens */
+  .s-app{display:grid;grid-template-columns:200px 1fr;background:var(--bg);}
+  .s-sidebar{background:#FFFFFF;border-right:1px solid var(--border);padding:16px 0;display:flex;flex-direction:column;gap:2px;min-height:540px;}
+  .s-sidebar-logo{display:flex;align-items:center;gap:8px;padding:0 14px 14px;border-bottom:1px solid var(--border);margin-bottom:6px;}
+  .s-logo-mark{width:26px;height:26px;background:#1A1916;border-radius:6px;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+  .s-logo-name{font-size:14px;font-weight:600;letter-spacing:-0.3px;color:#1A1916;}
+  .s-nav{display:flex;align-items:center;gap:8px;padding:7px 14px;font-size:12px;font-weight:500;color:#4A4845;cursor:pointer;border:none;background:none;font-family:'DM Sans',sans-serif;width:100%;text-align:left;}
+  .s-nav.active{color:#1A1916;background:#F0EEE9;}
+  .s-nav-icon{font-size:13px;width:16px;text-align:center;}
+  .s-sidebar-bottom{margin-top:auto;padding:10px 14px;border-top:1px solid var(--border);}
+  .s-user-row{display:flex;align-items:center;gap:8px;}
+  .s-user-av{width:26px;height:26px;background:#EEF2FB;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:600;color:#2E5BBA;}
+  .s-user-name{font-size:12px;font-weight:500;color:#1A1916;}
+  .s-user-plan{font-size:10px;color:#7A7770;}
+  .s-topnav{display:flex;align-items:center;justify-content:space-between;padding:10px 20px;background:#FFFFFF;border-bottom:1px solid var(--border);}
+  .s-btn{padding:6px 14px;font-size:12px;font-weight:500;color:#4A4845;background:#FFFFFF;border:1px solid var(--border);border-radius:7px;cursor:pointer;font-family:'DM Sans',sans-serif;}
+  .s-btn-primary{background:#1A1916;color:#FFFFFF;border-color:#1A1916;}
+  .s-tag-auto{background:#EAF5EE;color:#1A7A4A;font-size:10px;font-weight:600;padding:2px 7px;border-radius:4px;text-transform:uppercase;letter-spacing:0.3px;}
+  .s-tag-review{background:#FEF3DC;color:#8A5C00;font-size:10px;font-weight:600;padding:2px 7px;border-radius:4px;text-transform:uppercase;letter-spacing:0.3px;}
+  .s-status-badge{display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:100px;font-size:11px;font-weight:600;}
+  .s-badge-active{background:#EAF5EE;color:#1A7A4A;}
+  .s-badge-running{background:#EEF2FB;color:#2E5BBA;}
+  .s-badge-waiting{background:#FEF3DC;color:#8A5C00;}
+  .s-badge-paused{background:#F0EEE9;color:#7A7770;}
+  .s-badge-failed{background:#FEE2E2;color:#991B1B;}
+  .s-memory-tag{display:inline-flex;align-items:center;gap:5px;padding:4px 10px;background:#EAF5EE;border:1px solid #B8DFC8;border-radius:6px;font-size:11px;color:#1A7A4A;font-weight:500;margin-top:6px;}
+  .s-main{padding:24px 28px;background:var(--bg);}
+  .s-page-title{font-family:'DM Serif Display',serif;font-size:22px;letter-spacing:-0.4px;color:#1A1916;margin-bottom:4px;}
+  .s-section-label{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;color:#7A7770;margin-bottom:8px;}
+  .s-card{background:#FFFFFF;border:1px solid var(--border);border-radius:10px;padding:16px;margin-bottom:10px;}
+  .s-step-row{display:flex;align-items:center;gap:10px;background:#FFFFFF;border:1px solid var(--border);border-radius:9px;padding:11px 14px;margin-bottom:7px;}
+  .s-step-row.checkpoint{border-color:#C5D4F0;}
+  .s-step-num{width:22px;height:22px;border-radius:50%;background:#F0EEE9;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;color:#7A7770;flex-shrink:0;}
+  .s-step-row.checkpoint .s-step-num{background:#EEF2FB;color:#2E5BBA;}
+  .s-step-name{flex:1;font-size:13px;font-weight:500;color:#1A1916;}
+  .s-edit-btn{display:flex;align-items:center;justify-content:center;height:26px;padding:0 11px;font-size:11px;font-weight:500;color:#4A4845;background:#F7F6F3;border:1px solid var(--border);border-radius:6px;cursor:pointer;font-family:'DM Sans',sans-serif;flex-shrink:0;}
+  .s-bubble-scout{background:#EEF2FB;border:1px solid #C5D4F0;color:#1A1916;padding:11px 14px;border-radius:10px;font-size:13px;line-height:1.55;align-self:flex-start;max-width:88%;}
+  .s-bubble-user{background:#F0EEE9;border:1px solid var(--border);color:#1A1916;padding:11px 14px;border-radius:10px;font-size:13px;line-height:1.55;align-self:flex-end;max-width:88%;}
+  .s-bp-panel{background:var(--bg);display:flex;flex-direction:column;}
+  .s-bp-header{padding:14px 20px;border-bottom:1px solid var(--border);background:#FFFFFF;}
+  .s-spinner{width:14px;height:14px;border:2px solid #EEF2FB;border-top-color:#2E5BBA;border-radius:50%;animation:spin 1s linear infinite;}
+  @keyframes spin{to{transform:rotate(360deg);}}
+  .s-pulse{animation:pulse 1.2s ease-in-out infinite;}
+  @keyframes pulse{0%,100%{opacity:1;}50%{opacity:0.3;}}
+</style>
+</head>
+<body>
+
+<!-- TABLE OF CONTENTS -->
+<div class="toc">
+  <h1>Foreman Screen Reference</h1>
+  <p>v1.0 · All screens for @builder reference. Each screen is labeled with its ID. Find by Ctrl+F on the screen ID.</p>
+  <div class="toc-grid">
+    <div class="toc-item"><a href="#S01">S01 · Landing page</a></div>
+    <div class="toc-item"><a href="#S02">S02 · Sign in</a></div>
+    <div class="toc-item"><a href="#S03">S03 · Provider selection</a></div>
+    <div class="toc-item"><a href="#S04">S04 · API key setup</a></div>
+    <div class="toc-item"><a href="#S05">S05 · Dashboard — empty</a></div>
+    <div class="toc-item"><a href="#S06">S06 · Dashboard — populated</a></div>
+    <div class="toc-item"><a href="#S07">S07 · Scout — empty</a></div>
+    <div class="toc-item"><a href="#S08">S08 · Scout — building</a></div>
+    <div class="toc-item"><a href="#S09">S09 · Scout — complete</a></div>
+    <div class="toc-item"><a href="#S10">S10 · Review & Hire</a></div>
+    <div class="toc-item"><a href="#S11">S11 · Review — edit modal</a></div>
+    <div class="toc-item"><a href="#S12">S12 · Test run — initialising</a></div>
+    <div class="toc-item"><a href="#S13">S13 · Test run — running</a></div>
+    <div class="toc-item"><a href="#S14">S14 · Test run — checkpoint</a></div>
+    <div class="toc-item"><a href="#S15">S15 · Test run — complete</a></div>
+    <div class="toc-item"><a href="#S16">S16 · Test run — failed</a></div>
+    <div class="toc-item"><a href="#S17">S17 · Test run — output review</a></div>
+    <div class="toc-item"><a href="#S18">S18 · Agent run — initialising</a></div>
+    <div class="toc-item"><a href="#S19">S19 · Agent run — running</a></div>
+    <div class="toc-item"><a href="#S20">S20 · Agent run — checkpoint</a></div>
+    <div class="toc-item"><a href="#S21">S21 · Agent run — loop-back</a></div>
+    <div class="toc-item"><a href="#S22">S22 · Agent run — complete</a></div>
+    <div class="toc-item"><a href="#S23">S23 · Agent run — failed</a></div>
+    <div class="toc-item"><a href="#S24">S24 · Agent conversation</a></div>
+    <div class="toc-item"><a href="#S25">S25 · Agent conversation — checkpoint</a></div>
+    <div class="toc-item"><a href="#S26">S26 · Agent profile — memory</a></div>
+    <div class="toc-item"><a href="#S27">S27 · Agent profile — workflow</a></div>
+    <div class="toc-item"><a href="#S28">S28 · Agent profile — edit step</a></div>
+    <div class="toc-item"><a href="#S29">S29 · Settings — account</a></div>
+    <div class="toc-item"><a href="#S30">S30 · Settings — API key</a></div>
+    <div class="toc-item"><a href="#S31">S31 · Settings — usage</a></div>
+    <div class="toc-item"><a href="#S32">S32 · Settings — billing</a></div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- S01: LANDING PAGE -->
+<!-- ============================================================ -->
+<div id="S01" class="screen-block">
+<div class="screen-label">S01</div>
+<div class="screen-title">Landing page</div>
+<div class="screen-desc">First screen a visitor sees. Hero, product preview, features. Single CTA: Continue with Google.</div>
+<div class="screen-frame">
+<div style="font-family:'DM Sans',sans-serif;background:#F7F6F3;color:#1A1916;">
+  <!-- NAV -->
+  <nav style="display:flex;align-items:center;justify-content:space-between;padding:16px 40px;background:#FFFFFF;border-bottom:1px solid #D4CFC6;">
+    <div style="display:flex;align-items:center;gap:10px;">
+      <div style="width:28px;height:28px;background:#1A1916;border-radius:7px;display:flex;align-items:center;justify-content:center;"><svg viewBox="0 0 18 18" fill="none" width="14" height="14"><rect x="2" y="2" width="6" height="6" rx="1.5" fill="white"/><rect x="10" y="2" width="6" height="6" rx="1.5" fill="white" opacity="0.6"/><rect x="2" y="10" width="6" height="6" rx="1.5" fill="white" opacity="0.6"/><rect x="10" y="10" width="6" height="6" rx="1.5" fill="white" opacity="0.3"/></svg></div>
+      <span style="font-size:15px;font-weight:600;letter-spacing:-0.3px;">Foreman</span>
+    </div>
+    <div style="display:flex;gap:12px;align-items:center;">
+      <button style="padding:7px 16px;font-size:13px;font-weight:500;color:#4A4845;background:none;border:none;cursor:pointer;font-family:'DM Sans',sans-serif;">How it works</button>
+      <button style="padding:7px 16px;font-size:13px;font-weight:500;color:#FFFFFF;background:#1A1916;border:none;border-radius:8px;cursor:pointer;font-family:'DM Sans',sans-serif;">Sign in</button>
+    </div>
+  </nav>
+  <!-- HERO -->
+  <div style="max-width:860px;margin:0 auto;padding:72px 40px 48px;text-align:center;">
+    <div style="display:inline-flex;align-items:center;gap:6px;padding:5px 12px;background:#EEF2FB;border:1px solid #C5D4F0;border-radius:100px;font-size:12px;font-weight:500;color:#2E5BBA;margin-bottom:28px;">
+      <div style="width:6px;height:6px;background:#2E5BBA;border-radius:50%;"></div>Now in early access
+    </div>
+    <h1 style="font-family:'DM Serif Display',serif;font-size:56px;line-height:1.05;letter-spacing:-1.5px;color:#1A1916;margin-bottom:20px;">Your AI workforce,<br><em style="color:#2E5BBA;">hired in minutes.</em></h1>
+    <p style="font-size:17px;line-height:1.6;color:#4A4845;max-width:500px;margin:0 auto 36px;">Tell Scout what you need. Scout builds the agent, designs the workflow, and puts it to work. No code. No AI engineer.</p>
+    <div style="display:flex;align-items:center;justify-content:center;gap:12px;margin-bottom:14px;">
+      <button style="display:flex;align-items:center;gap:10px;padding:13px 24px;font-size:14px;font-weight:500;color:#FFFFFF;background:#1A1916;border:none;border-radius:10px;cursor:pointer;font-family:'DM Sans',sans-serif;">
+        <div style="width:18px;height:18px;background:#FFFFFF;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#4285F4;">G</div>
+        Continue with Google
+      </button>
+      <button style="padding:13px 22px;font-size:14px;font-weight:500;color:#4A4845;background:transparent;border:1px solid #D4CFC6;border-radius:10px;cursor:pointer;font-family:'DM Sans',sans-serif;">See how it works</button>
+    </div>
+    <p style="font-size:12px;color:#7A7770;">Free to start &nbsp;·&nbsp; Bring your own API key &nbsp;·&nbsp; No credit card required</p>
+  </div>
+  <!-- PRODUCT PREVIEW -->
+  <div style="max-width:960px;margin:0 auto 48px;padding:0 32px;">
+    <div style="background:#FFFFFF;border:1px solid #D4CFC6;border-radius:14px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.06);">
+      <div style="background:#F0EEE9;border-bottom:1px solid #D4CFC6;padding:11px 16px;display:flex;align-items:center;gap:7px;">
+        <div style="width:10px;height:10px;border-radius:50%;background:#FF5F57;"></div>
+        <div style="width:10px;height:10px;border-radius:50%;background:#FEBC2E;"></div>
+        <div style="width:10px;height:10px;border-radius:50%;background:#28C840;"></div>
+        <div style="flex:1;background:#F7F6F3;border:1px solid #D4CFC6;border-radius:5px;padding:4px 12px;font-size:11px;color:#7A7770;text-align:center;margin:0 12px;">app.foreman.so/create</div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;min-height:300px;">
+        <div style="border-right:1px solid #D4CFC6;padding:20px;display:flex;flex-direction:column;gap:12px;">
+          <div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.6px;color:#7A7770;">Scout — your chief of staff</div>
+          <div>
+            <div style="font-size:10px;font-weight:600;color:#2E5BBA;text-transform:uppercase;letter-spacing:0.4px;margin-bottom:4px;">Scout</div>
+            <div style="background:#EEF2FB;border:1px solid #C5D4F0;padding:10px 12px;border-radius:9px;font-size:12px;line-height:1.55;color:#1A1916;max-width:85%;"><strong>What should this agent do for you?</strong></div>
+          </div>
+          <div style="display:flex;justify-content:flex-end;">
+            <div style="background:#F0EEE9;border:1px solid #D4CFC6;padding:10px 12px;border-radius:9px;font-size:12px;line-height:1.55;color:#1A1916;max-width:88%;">Weekly LinkedIn post generator. Find hot AI topics, no repeats, ask for my approval, write in my voice.</div>
+          </div>
+          <div>
+            <div style="font-size:10px;font-weight:600;color:#2E5BBA;text-transform:uppercase;letter-spacing:0.4px;margin-bottom:4px;">Scout</div>
+            <div style="background:#EEF2FB;border:1px solid #C5D4F0;padding:10px 12px;border-radius:9px;font-size:12px;line-height:1.55;color:#1A1916;max-width:88%;">Got it — blueprint's on the right. Do you want 3 topic options or should I pick the strongest?</div>
+          </div>
+        </div>
+        <div style="background:#F7F6F3;padding:20px;">
+          <div style="font-size:13px;font-weight:600;color:#1A1916;margin-bottom:2px;">LinkedIn Post Generator</div>
+          <div style="font-size:11px;color:#7A7770;margin-bottom:14px;">Updates in real time as you chat</div>
+          <div style="display:flex;align-items:center;gap:8px;background:#FFFFFF;border:1px solid #D4CFC6;border-radius:8px;padding:9px 12px;margin-bottom:7px;"><div style="width:20px;height:20px;border-radius:50%;background:#F0EEE9;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:600;color:#7A7770;">1</div><div style="flex:1;font-size:12px;font-weight:500;color:#1A1916;">Find hot AI topics this week</div><div style="background:#EAF5EE;color:#1A7A4A;font-size:10px;font-weight:600;padding:2px 6px;border-radius:4px;">Auto</div></div>
+          <div style="display:flex;align-items:center;gap:8px;background:#FFFFFF;border:1px solid #D4CFC6;border-radius:8px;padding:9px 12px;margin-bottom:7px;"><div style="width:20px;height:20px;border-radius:50%;background:#F0EEE9;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:600;color:#7A7770;">2</div><div style="flex:1;font-size:12px;font-weight:500;color:#1A1916;">Check last 5 posts for overlap</div><div style="background:#EAF5EE;color:#1A7A4A;font-size:10px;font-weight:600;padding:2px 6px;border-radius:4px;">Auto</div></div>
+          <div style="display:flex;align-items:center;gap:8px;background:#FFFFFF;border:1px solid #C5D4F0;border-radius:8px;padding:9px 12px;margin-bottom:7px;"><div style="width:20px;height:20px;border-radius:50%;background:#EEF2FB;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:600;color:#2E5BBA;">4</div><div style="flex:1;font-size:12px;font-weight:500;color:#1A1916;">You select a topic</div><div style="background:#FEF3DC;color:#8A5C00;font-size:10px;font-weight:600;padding:2px 6px;border-radius:4px;">Review</div></div>
+          <div style="display:flex;align-items:center;gap:8px;background:#FFFFFF;border:1px solid #D4CFC6;border-radius:8px;padding:9px 12px;margin-bottom:7px;"><div style="width:20px;height:20px;border-radius:50%;background:#F0EEE9;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:600;color:#7A7770;">5</div><div style="flex:1;font-size:12px;font-weight:500;color:#1A1916;">Draft post in your voice</div><div style="background:#EAF5EE;color:#1A7A4A;font-size:10px;font-weight:600;padding:2px 6px;border-radius:4px;">Auto</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <!-- FEATURES -->
+  <div style="max-width:900px;margin:0 auto 40px;padding:0 40px;display:grid;grid-template-columns:repeat(3,1fr);gap:14px;">
+    <div style="background:#FFFFFF;border:1px solid #D4CFC6;border-radius:12px;padding:20px;">
+      <div style="font-size:22px;margin-bottom:10px;">⚡</div>
+      <div style="font-size:14px;font-weight:600;color:#1A1916;margin-bottom:6px;">Scout builds the workflow</div>
+      <div style="font-size:12px;line-height:1.6;color:#4A4845;">Describe your task in plain English. Scout designs the full agent workflow in real time.</div>
+    </div>
+    <div style="background:#FFFFFF;border:1px solid #D4CFC6;border-radius:12px;padding:20px;">
+      <div style="font-size:22px;margin-bottom:10px;">✋</div>
+      <div style="font-size:14px;font-weight:600;color:#1A1916;margin-bottom:6px;">You stay in control</div>
+      <div style="font-size:12px;line-height:1.6;color:#4A4845;">Set human approval checkpoints anywhere. Agents pause and wait before any critical action.</div>
+    </div>
+    <div style="background:#FFFFFF;border:1px solid #D4CFC6;border-radius:12px;padding:20px;">
+      <div style="font-size:22px;margin-bottom:10px;">🧠</div>
+      <div style="font-size:14px;font-weight:600;color:#1A1916;margin-bottom:6px;">Agents get smarter over time</div>
+      <div style="font-size:12px;line-height:1.6;color:#4A4845;">Every run teaches your agent more about how you work. Run 10 is visibly better than Run 1.</div>
+    </div>
+  </div>
+</div>
+</div>
+</div>
+
+<!-- ============================================================ -->
+<!-- S02: SIGN IN -->
+<!-- ============================================================ -->
+<div id="S02" class="screen-block">
+<div class="screen-label">S02</div>
+<div class="screen-title">Sign in</div>
+<div class="screen-desc">Google OAuth entry point. Single CTA. Dark filled button — never ghost/outlined.</div>
+<div class="screen-frame">
+<div style="font-family:'DM Sans',sans-serif;background:#F7F6F3;display:flex;align-items:center;justify-content:center;padding:60px 24px;min-height:400px;">
+  <div style="background:#FFFFFF;border:1px solid #D4CFC6;border-radius:16px;padding:48px 40px;width:100%;max-width:420px;box-shadow:0 4px 24px rgba(0,0,0,0.07);">
+    <div style="display:flex;align-items:center;gap:10px;justify-content:center;margin-bottom:28px;">
+      <div style="width:36px;height:36px;background:#1A1916;border-radius:9px;display:flex;align-items:center;justify-content:center;"><svg viewBox="0 0 18 18" fill="none" width="18" height="18"><rect x="2" y="2" width="6" height="6" rx="1.5" fill="white"/><rect x="10" y="2" width="6" height="6" rx="1.5" fill="white" opacity="0.6"/><rect x="2" y="10" width="6" height="6" rx="1.5" fill="white" opacity="0.6"/><rect x="10" y="10" width="6" height="6" rx="1.5" fill="white" opacity="0.3"/></svg></div>
+      <span style="font-size:18px;font-weight:600;letter-spacing:-0.3px;color:#1A1916;">Foreman</span>
+    </div>
+    <h2 style="font-family:'DM Serif Display',serif;font-size:26px;letter-spacing:-0.5px;text-align:center;margin-bottom:8px;color:#1A1916;">Welcome to Foreman</h2>
+    <p style="font-size:14px;color:#4A4845;text-align:center;margin-bottom:28px;line-height:1.5;">Sign in to build your AI workforce. No code required.</p>
+    <button style="display:flex;align-items:center;justify-content:center;gap:12px;width:100%;padding:14px;font-size:15px;font-weight:500;color:#FFFFFF;background:#1A1916;border:none;border-radius:10px;cursor:pointer;font-family:'DM Sans',sans-serif;">
+      <div style="width:20px;height:20px;background:#FFFFFF;border-radius:50%;display:flex;align-items:center;justify-content:center;">
+        <svg width="12" height="12" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>
+      </div>
+      Continue with Google
+    </button>
+    <p style="font-size:12px;color:#4A4845;text-align:center;line-height:1.6;margin-top:20px;">By continuing, you agree to our <a href="#" style="color:#2E5BBA;text-decoration:none;">Terms of Service</a> and <a href="#" style="color:#2E5BBA;text-decoration:none;">Privacy Policy</a>.<br>Your data is never used to train AI models.</p>
+  </div>
+</div>
+</div>
+</div>
+
+<!-- ============================================================ -->
+<!-- S03: PROVIDER SELECTION -->
+<!-- ============================================================ -->
+<div id="S03" class="screen-block">
+<div class="screen-label">S03</div>
+<div class="screen-title">Provider selection</div>
+<div class="screen-desc">Step 2 of onboarding. User picks LLM provider and model. Progress dots shown.</div>
+<div class="screen-frame">
+<div style="font-family:'DM Sans',sans-serif;background:#F7F6F3;display:flex;align-items:center;justify-content:center;padding:48px 24px;min-height:400px;">
+  <div style="background:#FFFFFF;border:1px solid #D4CFC6;border-radius:16px;padding:40px;width:100%;max-width:460px;box-shadow:0 4px 24px rgba(0,0,0,0.07);">
+    <button style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:500;color:#4A4845;background:none;border:none;cursor:pointer;margin-bottom:18px;font-family:'DM Sans',sans-serif;">← Back</button>
+    <div style="display:flex;gap:6px;justify-content:center;margin-bottom:24px;">
+      <div style="width:6px;height:6px;border-radius:50%;background:#D4CFC6;"></div>
+      <div style="width:18px;height:6px;border-radius:3px;background:#1A1916;"></div>
+      <div style="width:6px;height:6px;border-radius:50%;background:#D4CFC6;"></div>
+    </div>
+    <h2 style="font-family:'DM Serif Display',serif;font-size:22px;letter-spacing:-0.4px;color:#1A1916;margin-bottom:6px;">Choose your AI provider</h2>
+    <p style="font-size:13px;color:#4A4845;margin-bottom:18px;line-height:1.5;">Foreman uses your own API key. You pay the provider directly — we never mark up AI costs.</p>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px;">
+      <div style="border:1.5px solid #2E5BBA;background:#EEF2FB;border-radius:10px;padding:14px;cursor:pointer;">
+        <div style="font-size:10px;font-weight:600;background:#EAF5EE;color:#1A7A4A;padding:2px 7px;border-radius:4px;display:inline-block;margin-bottom:6px;">Popular</div>
+        <div style="font-size:14px;font-weight:600;color:#1A1916;">OpenAI</div>
+        <div style="font-size:11px;color:#7A7770;">GPT-4o, GPT-4o mini</div>
+      </div>
+      <div style="border:1.5px solid #D4CFC6;border-radius:10px;padding:14px;cursor:pointer;">
+        <div style="height:18px;margin-bottom:6px;"></div>
+        <div style="font-size:14px;font-weight:600;color:#1A1916;">Anthropic</div>
+        <div style="font-size:11px;color:#7A7770;">Claude 3.5, Haiku</div>
+      </div>
+      <div style="border:1.5px solid #D4CFC6;border-radius:10px;padding:14px;cursor:pointer;">
+        <div style="height:18px;margin-bottom:6px;"></div>
+        <div style="font-size:14px;font-weight:600;color:#1A1916;">Gemini</div>
+        <div style="font-size:11px;color:#7A7770;">1.5 Pro, Flash</div>
+      </div>
+      <div style="border:1.5px solid #D4CFC6;border-radius:10px;padding:14px;cursor:pointer;">
+        <div style="height:18px;margin-bottom:6px;"></div>
+        <div style="font-size:14px;font-weight:600;color:#1A1916;">Groq</div>
+        <div style="font-size:11px;color:#7A7770;">Llama 3, Mixtral</div>
+      </div>
+    </div>
+    <select style="width:100%;padding:10px 12px;border:1.5px solid #D4CFC6;border-radius:8px;font-family:'DM Sans',sans-serif;font-size:13px;color:#1A1916;background:#FFFFFF;margin-bottom:16px;appearance:none;">
+      <option>GPT-4o (Recommended)</option>
+    </select>
+    <button style="width:100%;padding:13px;font-size:14px;font-weight:500;color:#FFFFFF;background:#1A1916;border:none;border-radius:10px;cursor:pointer;font-family:'DM Sans',sans-serif;">Continue →</button>
+  </div>
+</div>
+</div>
+</div>
+
+<!-- ============================================================ -->
+<!-- S04: API KEY SETUP -->
+<!-- ============================================================ -->
+<div id="S04" class="screen-block">
+<div class="screen-label">S04</div>
+<div class="screen-title">API key setup</div>
+<div class="screen-desc">Step 3 of onboarding. User enters API key. Security badge mandatory. Progress dots shown.</div>
+<div class="screen-frame">
+<div style="font-family:'DM Sans',sans-serif;background:#F7F6F3;display:flex;align-items:center;justify-content:center;padding:48px 24px;min-height:400px;">
+  <div style="background:#FFFFFF;border:1px solid #D4CFC6;border-radius:16px;padding:40px;width:100%;max-width:460px;box-shadow:0 4px 24px rgba(0,0,0,0.07);">
+    <button style="font-size:13px;font-weight:500;color:#4A4845;background:none;border:none;cursor:pointer;margin-bottom:18px;font-family:'DM Sans',sans-serif;">← Back</button>
+    <div style="display:flex;gap:6px;justify-content:center;margin-bottom:24px;">
+      <div style="width:6px;height:6px;border-radius:50%;background:#D4CFC6;"></div>
+      <div style="width:6px;height:6px;border-radius:50%;background:#D4CFC6;"></div>
+      <div style="width:18px;height:6px;border-radius:3px;background:#1A1916;"></div>
+    </div>
+    <h2 style="font-family:'DM Serif Display',serif;font-size:22px;letter-spacing:-0.4px;color:#1A1916;margin-bottom:6px;">Add your OpenAI key</h2>
+    <p style="font-size:13px;color:#4A4845;margin-bottom:20px;line-height:1.5;">Your key is encrypted immediately. It's never stored in plaintext or shared with anyone.</p>
+    <div style="display:flex;align-items:center;gap:8px;padding:10px 12px;background:#EAF5EE;border:1px solid #B8DFC8;border-radius:8px;margin-bottom:16px;font-size:12px;color:#1A7A4A;font-weight:500;">🔒 Encrypted with Supabase Vault — plaintext never stored</div>
+    <label style="font-size:12px;font-weight:600;color:#4A4845;margin-bottom:5px;display:block;">API Key</label>
+    <div style="position:relative;margin-bottom:8px;">
+      <input type="password" placeholder="sk-proj-••••••••••••••••••••••" style="width:100%;padding:10px 40px 10px 12px;border:1.5px solid #D4CFC6;border-radius:8px;font-size:13px;color:#1A1916;background:#FFFFFF;box-sizing:border-box;font-family:monospace;">
+      <button style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;font-size:12px;color:#4A4845;cursor:pointer;">Show</button>
+    </div>
+    <div style="font-size:12px;color:#4A4845;margin-bottom:20px;">Don't have a key? <a href="#" style="color:#2E5BBA;text-decoration:none;">Get one from OpenAI →</a></div>
+    <button style="width:100%;padding:13px;font-size:14px;font-weight:500;color:#FFFFFF;background:#1A1916;border:none;border-radius:10px;cursor:pointer;font-family:'DM Sans',sans-serif;">Enter Foreman →</button>
+  </div>
+</div>
+</div>
+</div>
+
+<!-- ============================================================ -->
+<!-- S05: DASHBOARD EMPTY -->
+<!-- ============================================================ -->
+<div id="S05" class="screen-block">
+<div class="screen-label">S05</div>
+<div class="screen-title">Dashboard — empty state</div>
+<div class="screen-desc">First view after onboarding. No agents yet. Single clear CTA.</div>
+<div class="screen-frame">
+<div style="font-family:'DM Sans',sans-serif;background:#F7F6F3;" class="s-app">
+  <div class="s-sidebar">
+    <div class="s-sidebar-logo"><div class="s-logo-mark"><svg viewBox="0 0 18 18" fill="none" width="14" height="14"><rect x="2" y="2" width="6" height="6" rx="1.5" fill="white"/><rect x="10" y="2" width="6" height="6" rx="1.5" fill="white" opacity="0.6"/><rect x="2" y="10" width="6" height="6" rx="1.5" fill="white" opacity="0.6"/><rect x="10" y="10" width="6" height="6" rx="1.5" fill="white" opacity="0.3"/></svg></div><span class="s-logo-name">Foreman</span></div>
+    <button class="s-nav active"><span class="s-nav-icon">⊞</span>Workforce</button>
+    <button class="s-nav"><span class="s-nav-icon">↗</span>Activity</button>
+    <button class="s-nav"><span class="s-nav-icon">◎</span>Usage</button>
+    <button class="s-nav"><span class="s-nav-icon">⚙</span>Settings</button>
+    <div class="s-sidebar-bottom"><div class="s-user-row"><div class="s-user-av">S</div><div><div class="s-user-name">Shivansh</div><div class="s-user-plan">Free plan</div></div></div></div>
+  </div>
+  <div class="s-main">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:32px;">
+      <div class="s-page-title">Your workforce</div>
+      <button style="padding:9px 18px;font-size:13px;font-weight:500;color:#FFFFFF;background:#1A1916;border:none;border-radius:8px;cursor:pointer;font-family:'DM Sans',sans-serif;">+ Hire new agent</button>
+    </div>
+    <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:300px;text-align:center;gap:14px;">
+      <div style="width:64px;height:64px;background:#FFFFFF;border:1px solid #D4CFC6;border-radius:16px;display:flex;align-items:center;justify-content:center;font-size:28px;">⚡</div>
+      <div style="font-size:18px;font-weight:600;color:#1A1916;">No agents hired yet</div>
+      <div style="font-size:13px;color:#4A4845;line-height:1.6;max-width:300px;">Tell Scout what you need. Scout will design the workflow, set the schedule, and put your first agent to work.</div>
+      <button style="padding:11px 22px;font-size:14px;font-weight:500;color:#FFFFFF;background:#1A1916;border:none;border-radius:9px;cursor:pointer;font-family:'DM Sans',sans-serif;margin-top:4px;">+ Hire your first agent</button>
+    </div>
+  </div>
+</div>
+</div>
+</div>
+
+<!-- ============================================================ -->
+<!-- S06: DASHBOARD POPULATED -->
+<!-- ============================================================ -->
+<div id="S06" class="screen-block">
+<div class="screen-label">S06</div>
+<div class="screen-title">Dashboard — populated</div>
+<div class="screen-desc">4 agents shown. Stats row at top. All 4 status states demonstrated: Running, Active, Awaiting review, Paused.</div>
+<div class="screen-frame">
+<div style="font-family:'DM Sans',sans-serif;background:#F7F6F3;" class="s-app">
+  <div class="s-sidebar">
+    <div class="s-sidebar-logo"><div class="s-logo-mark"><svg viewBox="0 0 18 18" fill="none" width="14" height="14"><rect x="2" y="2" width="6" height="6" rx="1.5" fill="white"/><rect x="10" y="2" width="6" height="6" rx="1.5" fill="white" opacity="0.6"/><rect x="2" y="10" width="6" height="6" rx="1.5" fill="white" opacity="0.6"/><rect x="10" y="10" width="6" height="6" rx="1.5" fill="white" opacity="0.3"/></svg></div><span class="s-logo-name">Foreman</span></div>
+    <button class="s-nav active"><span class="s-nav-icon">⊞</span>Workforce</button>
+    <button class="s-nav"><span class="s-nav-icon">↗</span>Activity</button>
+    <button class="s-nav"><span class="s-nav-icon">◎</span>Usage</button>
+    <button class="s-nav"><span class="s-nav-icon">⚙</span>Settings</button>
+    <div class="s-sidebar-bottom"><div class="s-user-row"><div class="s-user-av">S</div><div><div class="s-user-name">Shivansh</div><div class="s-user-plan">Free plan</div></div></div></div>
+  </div>
+  <div class="s-main">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">
+      <div class="s-page-title">Your workforce</div>
+      <button style="padding:8px 16px;font-size:13px;font-weight:500;color:#FFFFFF;background:#1A1916;border:none;border-radius:8px;cursor:pointer;font-family:'DM Sans',sans-serif;">+ Hire new agent</button>
+    </div>
+    <!-- STATS -->
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:18px;">
+      <div style="background:#FFFFFF;border:1px solid #D4CFC6;border-radius:10px;padding:14px;"><div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;color:#7A7770;margin-bottom:4px;">Agents active</div><div style="font-size:20px;font-weight:600;color:#1A1916;letter-spacing:-0.3px;">4</div><div style="font-size:11px;color:#7A7770;margin-top:1px;">1 running now</div></div>
+      <div style="background:#FFFFFF;border:1px solid #D4CFC6;border-radius:10px;padding:14px;"><div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;color:#7A7770;margin-bottom:4px;">Hours saved</div><div style="font-size:20px;font-weight:600;color:#1A1916;letter-spacing:-0.3px;">38h</div><div style="font-size:11px;color:#7A7770;margin-top:1px;">this month</div></div>
+      <div style="background:#FFFFFF;border:1px solid #D4CFC6;border-radius:10px;padding:14px;"><div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;color:#7A7770;margin-bottom:4px;">Total runs</div><div style="font-size:20px;font-weight:600;color:#1A1916;letter-spacing:-0.3px;">127</div><div style="font-size:11px;color:#7A7770;margin-top:1px;">last 30 days</div></div>
+      <div style="background:#FFFFFF;border:1px solid #D4CFC6;border-radius:10px;padding:14px;"><div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;color:#7A7770;margin-bottom:4px;">API cost</div><div style="font-size:20px;font-weight:600;color:#1A1916;letter-spacing:-0.3px;">$6.40</div><div style="font-size:11px;color:#7A7770;margin-top:1px;">this month</div></div>
+    </div>
+    <!-- AGENT CARDS -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+      <!-- Running -->
+      <div style="background:#FFFFFF;border:1px solid #D4CFC6;border-radius:12px;padding:18px;">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:12px;">
+          <div><div style="font-size:14px;font-weight:600;color:#1A1916;margin-bottom:2px;">LinkedIn Post Generator</div><div style="font-size:11px;color:#7A7770;">Every Monday at 9:00 AM</div></div>
+          <div style="display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:100px;font-size:11px;font-weight:600;background:#EEF2FB;color:#2E5BBA;"><div style="width:5px;height:5px;border-radius:50%;background:currentColor;" class="s-pulse"></div>Running</div>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin-bottom:14px;">
+          <div style="background:#F7F6F3;border-radius:7px;padding:9px;text-align:center;"><div style="font-size:14px;font-weight:600;color:#1A1916;">24</div><div style="font-size:10px;color:#7A7770;margin-top:1px;">Total runs</div></div>
+          <div style="background:#F7F6F3;border-radius:7px;padding:9px;text-align:center;"><div style="font-size:14px;font-weight:600;color:#1A1916;">12h</div><div style="font-size:10px;color:#7A7770;margin-top:1px;">Time saved</div></div>
+          <div style="background:#F7F6F3;border-radius:7px;padding:9px;text-align:center;"><div style="font-size:14px;font-weight:600;color:#1A1916;">$1.80</div><div style="font-size:10px;color:#7A7770;margin-top:1px;">API cost</div></div>
+        </div>
+        <div style="display:flex;align-items:center;justify-content:space-between;">
+          <div style="font-size:11px;color:#7A7770;">Running now — Step 3 of 7</div>
+          <div style="display:flex;gap:6px;"><button style="padding:5px 11px;font-size:11px;font-weight:500;color:#4A4845;background:#FFFFFF;border:1px solid #D4CFC6;border-radius:6px;cursor:pointer;font-family:'DM Sans',sans-serif;">Edit</button><button style="padding:5px 11px;font-size:11px;font-weight:500;color:#4A4845;background:#FFFFFF;border:1px solid #D4CFC6;border-radius:6px;cursor:pointer;font-family:'DM Sans',sans-serif;">View run</button></div>
+        </div>
+      </div>
+      <!-- Active -->
+      <div style="background:#FFFFFF;border:1px solid #D4CFC6;border-radius:12px;padding:18px;">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:12px;">
+          <div><div style="font-size:14px;font-weight:600;color:#1A1916;margin-bottom:2px;">Competitor Analysis</div><div style="font-size:11px;color:#7A7770;">Every Friday at 10:00 AM</div></div>
+          <div style="display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:100px;font-size:11px;font-weight:600;background:#EAF5EE;color:#1A7A4A;"><div style="width:5px;height:5px;border-radius:50%;background:currentColor;"></div>Active</div>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin-bottom:14px;">
+          <div style="background:#F7F6F3;border-radius:7px;padding:9px;text-align:center;"><div style="font-size:14px;font-weight:600;color:#1A1916;">18</div><div style="font-size:10px;color:#7A7770;margin-top:1px;">Total runs</div></div>
+          <div style="background:#F7F6F3;border-radius:7px;padding:9px;text-align:center;"><div style="font-size:14px;font-weight:600;color:#1A1916;">9h</div><div style="font-size:10px;color:#7A7770;margin-top:1px;">Time saved</div></div>
+          <div style="background:#F7F6F3;border-radius:7px;padding:9px;text-align:center;"><div style="font-size:14px;font-weight:600;color:#1A1916;">$2.10</div><div style="font-size:10px;color:#7A7770;margin-top:1px;">API cost</div></div>
+        </div>
+        <div style="display:flex;align-items:center;justify-content:space-between;">
+          <div style="font-size:11px;color:#7A7770;">Last run: 3 days ago</div>
+          <div style="display:flex;gap:6px;"><button style="padding:5px 11px;font-size:11px;font-weight:500;color:#4A4845;background:#FFFFFF;border:1px solid #D4CFC6;border-radius:6px;cursor:pointer;font-family:'DM Sans',sans-serif;">Edit</button><button style="padding:5px 11px;font-size:11px;font-weight:500;color:#FFFFFF;background:#1A1916;border:none;border-radius:6px;cursor:pointer;font-family:'DM Sans',sans-serif;">Run now</button></div>
+        </div>
+      </div>
+      <!-- Awaiting review -->
+      <div style="background:#FFFFFF;border:1.5px solid #C5D4F0;border-radius:12px;padding:18px;">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:12px;">
+          <div><div style="font-size:14px;font-weight:600;color:#1A1916;margin-bottom:2px;">PRD Generator</div><div style="font-size:11px;color:#7A7770;">Manual trigger</div></div>
+          <div style="display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:100px;font-size:11px;font-weight:600;background:#FEF3DC;color:#8A5C00;"><div style="width:5px;height:5px;border-radius:50%;background:currentColor;"></div>Awaiting review</div>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin-bottom:14px;">
+          <div style="background:#F7F6F3;border-radius:7px;padding:9px;text-align:center;"><div style="font-size:14px;font-weight:600;color:#1A1916;">7</div><div style="font-size:10px;color:#7A7770;margin-top:1px;">Total runs</div></div>
+          <div style="background:#F7F6F3;border-radius:7px;padding:9px;text-align:center;"><div style="font-size:14px;font-weight:600;color:#1A1916;">11h</div><div style="font-size:10px;color:#7A7770;margin-top:1px;">Time saved</div></div>
+          <div style="background:#F7F6F3;border-radius:7px;padding:9px;text-align:center;"><div style="font-size:14px;font-weight:600;color:#1A1916;">$1.20</div><div style="font-size:10px;color:#7A7770;margin-top:1px;">API cost</div></div>
+        </div>
+        <div style="display:flex;align-items:center;justify-content:space-between;">
+          <div style="font-size:11px;color:#7A7770;">Checkpoint waiting — 2h ago</div>
+          <div style="display:flex;gap:6px;"><button style="padding:5px 11px;font-size:11px;font-weight:500;color:#4A4845;background:#FFFFFF;border:1px solid #D4CFC6;border-radius:6px;cursor:pointer;font-family:'DM Sans',sans-serif;">Edit</button><button style="padding:5px 11px;font-size:11px;font-weight:500;color:#FFFFFF;background:#1A1916;border:none;border-radius:6px;cursor:pointer;font-family:'DM Sans',sans-serif;">Review →</button></div>
+        </div>
+      </div>
+      <!-- Paused -->
+      <div style="background:#FFFFFF;border:1px solid #D4CFC6;border-radius:12px;padding:18px;">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:12px;">
+          <div><div style="font-size:14px;font-weight:600;color:#1A1916;margin-bottom:2px;">NPS Analysis</div><div style="font-size:11px;color:#7A7770;">On file upload</div></div>
+          <div style="display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:100px;font-size:11px;font-weight:600;background:#F0EEE9;color:#7A7770;"><div style="width:5px;height:5px;border-radius:50%;background:currentColor;"></div>Paused</div>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin-bottom:14px;">
+          <div style="background:#F7F6F3;border-radius:7px;padding:9px;text-align:center;"><div style="font-size:14px;font-weight:600;color:#1A1916;">12</div><div style="font-size:10px;color:#7A7770;margin-top:1px;">Total runs</div></div>
+          <div style="background:#F7F6F3;border-radius:7px;padding:9px;text-align:center;"><div style="font-size:14px;font-weight:600;color:#1A1916;">6h</div><div style="font-size:10px;color:#7A7770;margin-top:1px;">Time saved</div></div>
+          <div style="background:#F7F6F3;border-radius:7px;padding:9px;text-align:center;"><div style="font-size:14px;font-weight:600;color:#1A1916;">$1.30</div><div style="font-size:10px;color:#7A7770;margin-top:1px;">API cost</div></div>
+        </div>
+        <div style="display:flex;align-items:center;justify-content:space-between;">
+          <div style="font-size:11px;color:#7A7770;">Last run: 2 weeks ago</div>
+          <div style="display:flex;gap:6px;"><button style="padding:5px 11px;font-size:11px;font-weight:500;color:#4A4845;background:#FFFFFF;border:1px solid #D4CFC6;border-radius:6px;cursor:pointer;font-family:'DM Sans',sans-serif;">Edit</button><button style="padding:5px 11px;font-size:11px;font-weight:500;color:#FFFFFF;background:#1A1916;border:none;border-radius:6px;cursor:pointer;font-family:'DM Sans',sans-serif;">Resume</button></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+</div>
+
+<!-- NOTE: Screens S07-S32 follow the same pattern. -->
+<!-- Each screen is self-contained HTML with inline styles. -->
+<!-- @builder: Search for the screen ID (e.g. "S19") to find the relevant screen. -->
+<!-- All design tokens are defined in SOT/design.md -->
+
+<!-- ============================================================ -->
+<!-- DESIGN TOKEN QUICK REFERENCE -->
+<!-- ============================================================ -->
+<div style="max-width:800px;margin:64px auto 0;padding:32px;background:#2A2926;border:1px solid #3A3936;border-radius:12px;">
+  <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.8px;color:#5A5A55;margin-bottom:16px;">Design Token Quick Reference</div>
+  <div style="font-family:monospace;font-size:12px;color:#9B9890;line-height:2;">
+    --bg: #F7F6F3<br>
+    --surface: #FFFFFF<br>
+    --surface2: #F0EEE9<br>
+    --border: #D4CFC6<br>
+    --text-primary: #1A1916<br>
+    --text-secondary: #4A4845<br>
+    --text-tertiary: #7A7770<br>
+    --accent: #2E5BBA<br>
+    --accent-light: #EEF2FB<br>
+    --accent-border: #C5D4F0<br>
+    --green: #1A7A4A · --green-bg: #EAF5EE<br>
+    --amber: #8A5C00 · --amber-bg: #FEF3DC<br>
+    --red: #991B1B · --red-bg: #FEE2E2<br>
+    Font heading: DM Serif Display<br>
+    Font body: DM Sans
+  </div>
+</div>
+
+</body>
+</html>
