@@ -16,7 +16,7 @@ begin
   end if;
 
   -- Create secret in vault
-  select id into new_secret_id from vault.create_secret(secret_value, 'llm_key_' || user_id::text || '_' || provider_name);
+  new_secret_id := vault.create_secret(secret_value, 'llm_key_' || user_id::text || '_' || provider_name);
 
   -- Upsert config
   insert into public.user_llm_config (user_id, provider, model, vault_secret_id)
