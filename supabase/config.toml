@@ -9,7 +9,7 @@ port = 54322
 
 [auth]
 site_url = "http://127.0.0.1:3000"
-additional_redirect_urls = ["http://127.0.0.1:3000/auth/callback", "http://localhost:3000/auth/callback", "http://localhost:3000/"]
+additional_redirect_urls = ["http://127.0.0.1:3000/auth/callback", "http://localhost:3000/auth/callback"]
 
 # Enable Google OAuth provider
 [auth.external.google]
