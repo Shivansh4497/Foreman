@@ -38,10 +38,10 @@ export async function POST(request: Request) {
 
     // Insert to vault and modify schema in one protected RPC sequence
     const { error: rpcError } = await supabaseAdmin.rpc('insert_vault_secret_admin', {
-      user_id: user.id,
-      secret_value: apiKey,
-      provider_name: provider,
-      model_name: model
+      p_user_id: user.id,
+      p_api_key: apiKey,
+      p_provider: provider,
+      p_model: model
     });
 
     if (rpcError) {
