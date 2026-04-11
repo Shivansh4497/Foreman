@@ -7,6 +7,11 @@ export async function POST(request: Request) {
     const authHeader = request.headers.get('Authorization');
     
     if (!authHeader) {
+      console.error('[API keys/save] Missing authorization header', { 
+        error: 'Missing Authorization header', 
+        provider, 
+        model 
+      });
       return NextResponse.json({ error: 'Missing authorization header' }, { status: 401 });
     }
 
@@ -21,6 +26,13 @@ export async function POST(request: Request) {
     const { data: { user }, error: authError } = await supabaseAdmin.auth.getUser(token);
 
     if (authError || !user) {
+      console.error('[API keys/save] Auth error', { 
+        error: authError?.message || 'No user returned',
+        code: authError?.status,
+        details: authError,
+        provider,
+        model 
+      });
       return NextResponse.json({ error: 'Unauthorized or invalid token' }, { status: 401 });
     }
 
@@ -33,13 +45,26 @@ export async function POST(request: Request) {
     });
 
     if (rpcError) {
-      console.error('Vault insertion error:', rpcError.message || rpcError);
+      console.error('[API keys/save] Vault insertion error', {
+        error: rpcError.message,
+        code: rpcError.code,
+        details: rpcError.details,
+        hint: rpcError.hint,
+        provider,
+        model,
+        userId: user.id
+      });
       return NextResponse.json({ error: 'Failed to securely store API key' }, { status: 500 });
     }
 
     return NextResponse.json({ success: true, message: 'Key saved securely in Vault.' });
     
   } catch (err: any) {
+    console.error('[API keys/save] Catch block error', {
+      error: err?.message || String(err),
+      code: err?.code,
+      details: err
+    });
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }
