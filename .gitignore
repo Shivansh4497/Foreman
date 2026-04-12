@@ -27,3 +27,5 @@ yarn-error.log*
 supabase/.branches
 supabase/.temp
 .vercel
+
+.trigger

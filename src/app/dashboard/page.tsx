@@ -339,7 +339,22 @@ export default function DashboardPage() {
                           Resume
                         </button>
                       ) : (
-                        <button style={{
+                        <button 
+                          onClick={async () => {
+                            const res = await fetch('/api/runs/start', {
+                              method: 'POST',
+                              headers: {
+                                'Content-Type': 'application/json',
+                                'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`
+                              },
+                              body: JSON.stringify({ agent_id: agent.id })
+                            });
+                            if (res.ok) {
+                              const { run_id } = await res.json();
+                              router.push(`/dashboard/run/${run_id}`);
+                            }
+                          }}
+                          style={{
                           padding: '5px 11px', fontSize: '11px', fontWeight: 500, color: '#FFFFFF', background: '#1A1916', border: 'none', borderRadius: '6px', cursor: 'pointer'
                         }}>
                           Run now
