@@ -119,8 +119,26 @@ async function callLLM(opts: {
     const data = await response.json();
     let text = data.choices?.[0]?.message?.content ?? '';
     
-    if (expectJson || text.trim().startsWith('```')) {
-      text = text.replace(/^```[a-z]*\n/, '').replace(/\n```$/, '').trim();
+    if (expectJson) {
+      const firstBrace = text.indexOf('{');
+      const firstBracket = text.indexOf('[');
+      let start = -1;
+      if (firstBrace === -1) start = firstBracket;
+      else if (firstBracket === -1) start = firstBrace;
+      else start = Math.min(firstBrace, firstBracket);
+
+      if (start !== -1) {
+        const lastBrace = text.lastIndexOf('}');
+        const lastBracket = text.lastIndexOf(']');
+        let end = -1;
+        if (lastBrace === -1) end = lastBracket;
+        else if (lastBracket === -1) end = lastBrace;
+        else end = Math.max(lastBrace, lastBracket);
+
+        if (end !== -1 && end >= start) {
+          text = text.substring(start, end + 1);
+        }
+      }
     }
     
     return text;
@@ -150,8 +168,26 @@ async function callLLM(opts: {
   const data = await response.json();
   let text = data.content?.[0]?.text ?? '';
   
-  if (expectJson || text.trim().startsWith('```')) {
-    text = text.replace(/^```[a-z]*\n/, '').replace(/\n```$/, '').trim();
+  if (expectJson) {
+    const firstBrace = text.indexOf('{');
+    const firstBracket = text.indexOf('[');
+    let start = -1;
+    if (firstBrace === -1) start = firstBracket;
+    else if (firstBracket === -1) start = firstBrace;
+    else start = Math.min(firstBrace, firstBracket);
+
+    if (start !== -1) {
+      const lastBrace = text.lastIndexOf('}');
+      const lastBracket = text.lastIndexOf(']');
+      let end = -1;
+      if (lastBrace === -1) end = lastBracket;
+      else if (lastBracket === -1) end = lastBrace;
+      else end = Math.max(lastBrace, lastBracket);
+
+      if (end !== -1 && end >= start) {
+        text = text.substring(start, end + 1);
+      }
+    }
   }
   
   return text;
