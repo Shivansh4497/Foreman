@@ -69,6 +69,19 @@ async function callLLM(opts: {
 }): Promise<string> {
   const { provider, model, apiKey, systemPrompt, userTurn } = opts;
 
+  // Map presentation names from user_llm_config to actual API model identifiers.
+  const modelMapping: Record<string, string> = {
+    'GPT-4o (Recommended)': 'gpt-4o',
+    'GPT-4o mini': 'gpt-4o-mini',
+    'Claude 3.5 Sonnet': 'claude-3-5-sonnet-20240620',
+    'Claude 3 Haiku': 'claude-3-haiku-20240307',
+    'Gemini 1.5 Pro': 'gemini-1.5-pro-latest',
+    'Gemini 1.5 Flash': 'gemini-1.5-flash-latest',
+    'Llama 3': 'llama3-70b-8192',
+    'Mixtral 8x7b': 'mixtral-8x7b-32768',
+  };
+  const apiModel = modelMapping[model] || model;
+
   // Normalise provider names to expected API endpoint patterns.
   const providerLower = provider.toLowerCase();
   const isAnthropic = providerLower === 'anthropic';
@@ -89,7 +102,7 @@ async function callLLM(opts: {
         Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model,
+        model: apiModel,
         messages: [
           { role: 'system', content: systemPrompt },
           { role: 'user', content: userTurn },
@@ -116,7 +129,7 @@ async function callLLM(opts: {
       'anthropic-version': '2023-06-01',
     },
     body: JSON.stringify({
-      model,
+      model: apiModel,
       max_tokens: 4096,
       system: systemPrompt,
       messages: [{ role: 'user', content: userTurn }],
