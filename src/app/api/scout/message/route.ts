@@ -70,11 +70,19 @@ async function callLLM(opts: {
   const { provider, model, apiKey, systemPrompt, userTurn } = opts;
 
   // Normalise provider names to expected API endpoint patterns.
-  const isAnthropic = provider === 'anthropic';
+  const providerLower = provider.toLowerCase();
+  const isAnthropic = providerLower === 'anthropic';
   const isOpenAI = !isAnthropic; // treat anything non-anthropic as OpenAI-compatible
 
   if (isOpenAI) {
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+    let endpoint = 'https://api.openai.com/v1/chat/completions';
+    if (providerLower === 'groq') {
+      endpoint = 'https://api.groq.com/openai/v1/chat/completions';
+    } else if (providerLower === 'gemini') {
+      endpoint = 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions';
+    }
+
+    const response = await fetch(endpoint, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -92,7 +100,7 @@ async function callLLM(opts: {
 
     if (!response.ok) {
       const errText = await response.text();
-      throw new Error(`LLM API error ${response.status}: ${errText.slice(0, 200)}`);
+      throw new Error(`LLM API error (provider=${providerLower}) ${response.status}: ${errText.slice(0, 200)}`);
     }
 
     const data = await response.json();
