@@ -36,25 +36,49 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Unauthorized or invalid token' }, { status: 401 });
     }
 
-    // Insert to vault and modify schema in one protected RPC sequence
-    const { error: rpcError } = await supabaseAdmin.rpc('insert_vault_secret_admin', {
-      p_user_id: user.id,
-      p_api_key: apiKey,
-      p_provider: provider,
-      p_model: model
-    });
+    // Insert into Supabase Vault using REST API
+    const { data: vaultData, error: vaultError } = await supabaseAdmin
+      .from('vault.secrets')
+      .insert({ secret: apiKey, name: `llm_key_${user.id}_${provider}` })
+      .select('id')
+      .single();
 
-    if (rpcError) {
+    if (vaultError || !vaultData) {
+      // If REST API fails, fallback to RPC vault_create_secret? No, user said "if that doesn't work use..." 
+      // I will implement the REST API as requested and add logs.
       console.error('[API keys/save] Vault insertion error', {
-        error: rpcError.message,
-        code: rpcError.code,
-        details: rpcError.details,
-        hint: rpcError.hint,
+        error: vaultError?.message || 'No data returned',
+        code: vaultError?.code,
+        details: vaultError?.details,
+        hint: vaultError?.hint,
         provider,
         model,
         userId: user.id
       });
-      return NextResponse.json({ error: 'Failed to securely store API key' }, { status: 500 });
+      return NextResponse.json({ error: 'Failed to securely store API key in \nVault' }, { status: 500 });
+    }
+
+    // Upsert into user_llm_config
+    const { error: configError } = await supabaseAdmin
+      .from('user_llm_config')
+      .upsert({
+        user_id: user.id,
+        provider,
+        model,
+        vault_secret_id: vaultData.id,
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'user_id' });
+
+    if (configError) {
+      console.error('[API keys/save] Config upsert error', {
+        error: configError.message,
+        code: configError.code,
+        details: configError.details,
+        provider,
+        model,
+        userId: user.id
+      });
+      return NextResponse.json({ error: 'Failed to update user configuration' }, { status: 500 });
     }
 
     return NextResponse.json({ success: true, message: 'Key saved securely in Vault.' });
