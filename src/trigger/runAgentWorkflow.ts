@@ -2,20 +2,22 @@ import { task, logger } from "@trigger.dev/sdk/v3";
 import { createClient } from "@supabase/supabase-js";
 import { callLLM } from "../lib/llm";
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
 
 export const runAgentWorkflow = task({
   id: "run-agent-workflow",
   maxDuration: 3600,
   run: async (payload: { run_id: string }) => {
     logger.info(`Starting agent workflow for run: ${payload.run_id}`);
+    
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+    const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     // 1. Fetch Run and Agent metadata
     const { data: run, error: runErr } = await supabase
       .from('agent_runs')
-      .select('*, agents(name, agent_memory), users(id)')
+      .select('*, agents(name, agent_memory)')
       .eq('id', payload.run_id)
       .single();
 
@@ -170,6 +172,10 @@ Perform the objective now. Output ONLY what is requested in the OUT FORMAT. Do n
 
 // Helper Function
 async function failRun(runId: string, errorReason: string) {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+  const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+  const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
   await supabase
     .from('agent_runs')
     .update({ 

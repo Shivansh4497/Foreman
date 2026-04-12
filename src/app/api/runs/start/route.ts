@@ -56,7 +56,7 @@ export async function POST(request: Request) {
 
     if (runErr || !run) {
       console.error(`[runs/start] Failed to create run: ${runErr?.message}`);
-      return NextResponse.json({ error: 'Failed to initialize agent run' }, { status: 500 });
+      return NextResponse.json({ error: `Failed to initialize agent run: ${runErr?.message}` }, { status: 500 });
     }
 
     // Trigger background executed via Trigger.dev
@@ -69,6 +69,6 @@ export async function POST(request: Request) {
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Unknown error';
     console.error(`[runs/start] Catch block: ${message}`);
-    return NextResponse.json({ error: 'An unexpected error occurred' }, { status: 500 });
+    return NextResponse.json({ error: `An unexpected error occurred: ${message}` }, { status: 500 });
   }
 }

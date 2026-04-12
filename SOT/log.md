@@ -48,3 +48,63 @@ None detected.
 VERIFIED — deployed and confirmed working in production at foreman-green.vercel.app
 
 ---
+
+## Out-of-SOP Development Log
+**Timestamp:** 2026-04-13
+**Sprint status:** COMPLETE (Built Outside SOP)
+
+### Agents
+| Agent | Status | Notes |
+|-------|--------|-------|
+| @architect | BYPASSED | No build plan created prior to execution |
+| @builder (hybrid) | COMPLETE | Heavy unguided development execution |
+
+### Build Notes
+- Execution occurred completely outside the normal SOP (no build plan was used).
+- Features 2, 3, 4, and 9 were developed rapidly and verified in code.
+- Codebase is now significantly ahead of the declared Sprint 2 scope.
+
+### Files Created
+**API Routes**
+- `src/app/api/runs/resume/route.ts`
+- `src/app/api/runs/start/route.ts`
+- `src/app/api/scout/blueprint/route.ts`
+- `src/app/api/scout/hire/route.ts`
+- `src/app/api/scout/message/route.ts`
+- `src/app/api/scout/start/route.ts`
+- `src/app/api/scout/step/route.ts`
+- `src/app/api/settings/account/route.ts`
+- `src/app/api/settings/config/route.ts`
+- `src/app/api/settings/usage/route.ts`
+
+**Pages**
+- `src/app/create/page.tsx`
+- `src/app/dashboard/run/[id]/page.tsx`
+- `src/app/dashboard/settings/page.tsx`
+- `src/app/review/page.tsx`
+
+**Components**
+- `src/components/scout/BlueprintPanel.tsx`
+- `src/components/scout/ScoutChatPanel.tsx`
+- `src/components/scout/StepEditModal.tsx`
+- `src/components/settings/AccountTab.tsx`
+- `src/components/settings/ApiKeyTab.tsx`
+- `src/components/settings/BillingTab.tsx`
+- `src/components/settings/UsageTab.tsx`
+
+**Libraries & Trigger**
+- `src/lib/llm.ts`
+- `src/trigger/dummy.ts`
+- `src/trigger/example.ts`
+- `src/trigger/runAgentWorkflow.ts`
+
+**Database Migrations**
+- `supabase/migrations/20260413000001_create_agents_table.sql`
+- `supabase/migrations/20260413000002_create_agent_steps_table.sql`
+- `supabase/migrations/20260413000003_create_conversations_table.sql`
+- `supabase/migrations/20260413000004_create_agent_runs_table.sql`
+
+### SOT Drift
+Significant positive drift. SOT files have been updated to reflect the reality that Features 2, 3, 4, and 9 exist in code.
+
+---

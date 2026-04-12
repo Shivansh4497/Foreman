@@ -13,6 +13,78 @@ export default function RunExecutionPage() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [humanInput, setHumanInput] = useState('');
+  const [expandedSteps, setExpandedSteps] = useState<Record<string, boolean>>({});
+
+  const toggleStep = (stepNumber: string) => {
+    setExpandedSteps(prev => ({
+      ...prev,
+      [stepNumber]: !prev[stepNumber]
+    }));
+  };
+
+  const renderOutput = (output: any) => {
+    if (!output) return null;
+    
+    let parsed: any;
+    try {
+      parsed = typeof output === 'string' ? JSON.parse(output) : output;
+    } catch (e) {
+      return <div style={{ whiteSpace: 'pre-wrap' }}>{output}</div>;
+    }
+
+    // 1. Array of objects with "topic" or "title" -> bullet list
+    if (Array.isArray(parsed) && parsed.length > 0 && (parsed[0].topic || parsed[0].title)) {
+      return (
+        <ul style={{ margin: 0, paddingLeft: '20px', listStyleType: 'disc' }}>
+          {parsed.map((item: any, i: number) => (
+            <li key={i} style={{ marginBottom: '4px' }}>
+              {item.topic || item.title}
+            </li>
+          ))}
+        </ul>
+      );
+    }
+
+    // 2. Object with "post_draft" -> formatted text block
+    if (parsed && typeof parsed === 'object' && parsed.post_draft) {
+      return (
+        <div style={{ whiteSpace: 'pre-wrap', lineHeight: '1.6' }}>
+          {parsed.post_draft}
+        </div>
+      );
+    }
+
+    // 3. Plain string
+    if (typeof parsed === 'string') {
+      return <div style={{ whiteSpace: 'pre-wrap' }}>{parsed}</div>;
+    }
+
+    // 4. Other JSON -> clean key-value list
+    if (parsed && typeof parsed === 'object') {
+      return (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          {Object.entries(parsed).map(([key, value]) => {
+            const displayKey = key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+            let displayValue = '';
+            if (typeof value === 'object') {
+              displayValue = JSON.stringify(value).replace(/[[\]{}"]/g, '').replace(/:/g, ': ').replace(/,/g, ', ');
+            } else {
+              displayValue = String(value);
+            }
+            
+            return (
+              <div key={key} style={{ fontSize: '13px' }}>
+                <span style={{ fontWeight: 600, color: 'var(--text-primary)', marginRight: '8px' }}>{displayKey}:</span>
+                <span style={{ color: 'var(--text-secondary)' }}>{displayValue}</span>
+              </div>
+            );
+          })}
+        </div>
+      );
+    }
+
+    return <div style={{ whiteSpace: 'pre-wrap' }}>{String(output)}</div>;
+  };
 
   // Setup loop
   useEffect(() => {
@@ -162,19 +234,37 @@ export default function RunExecutionPage() {
                 <div style={{ background: '#FFFFFF', border: borderStyle, borderRadius: '10px', overflow: 'hidden' }}>
                   
                   {/* Step Header */}
-                  <div style={{ padding: '12px 16px', background: stepStatus === 'waiting_for_human' ? 'var(--amber-bg)' : stepStatus === 'running' ? 'var(--accent-light)' : 'transparent', borderBottom: output || stepStatus === 'waiting_for_human' ? `1px solid var(--border)` : 'none' }}>
-                    <div style={{ fontSize: '14px', fontWeight: 500, color: 'var(--text-primary)' }}>
-                      {step.name || step.objective.split('.')[0]}
+                  <div 
+                    onClick={() => toggleStep(step.step_number.toString())}
+                    style={{ 
+                      padding: '12px 16px', 
+                      background: stepStatus === 'waiting_for_human' ? 'var(--amber-bg)' : stepStatus === 'running' ? 'var(--accent-light)' : 'transparent', 
+                      borderBottom: (expandedSteps[step.step_number.toString()] && (output || stepStatus === 'waiting_for_human')) ? `1px solid var(--border)` : 'none',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between'
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <div style={{ fontSize: '14px', fontWeight: 500, color: 'var(--text-primary)' }}>
+                        {step.name || step.objective.split('.')[0]}
+                      </div>
+                      {step.step_type === 'manual_review' && (
+                        <div style={{ fontSize: '10px', background: '#FEF3DC', color: '#8A5C00', padding: '2px 6px', borderRadius: '4px', fontWeight: 600, border: '1px solid #FDE68A' }}>MANUAL REVIEW</div>
+                      )}
                     </div>
-                    {step.step_type === 'manual_review' && (
-                      <div style={{ fontSize: '10px', marginTop: '4px', display: 'inline-block', background: 'var(--amber-bg)', color: 'var(--amber)', padding: '2px 6px', borderRadius: '4px', fontWeight: 600 }}>MANUAL REVIEW</div>
-                    )}
+                    <div style={{ fontSize: '14px', color: circleColor }}>
+                      {stepStatus === 'completed' ? '✓' : stepStatus === 'running' ? (
+                        <div style={{ width: '12px', height: '12px', borderRadius: '50%', border: '2px solid currentColor', borderTopColor: 'transparent', animation: 'spin 1s linear infinite' }} />
+                      ) : null}
+                    </div>
                   </div>
 
-                  {/* output visible immediately on completion */}
-                  {output && (
-                    <div style={{ padding: '16px', fontSize: '13px', color: 'var(--text-secondary)', background: '#FDFCF9', fontFamily: 'monospace', whiteSpace: 'pre-wrap', maxHeight: '300px', overflowY: 'auto' }}>
-                      {output}
+                  {/* output visible when expanded */}
+                  {expandedSteps[step.step_number.toString()] && output && (
+                    <div style={{ margin: '0 16px 16px 16px', padding: '12px', fontSize: '13px', color: 'var(--text-secondary)', background: '#F7F6F3', border: '1px solid #D4CFC6', borderRadius: '8px', maxHeight: '400px', overflowY: 'auto' }}>
+                      {renderOutput(output)}
                     </div>
                   )}
 

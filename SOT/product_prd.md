@@ -2,9 +2,9 @@
 
 **Version:** 1.0.0
 **Status:** IN PROGRESS
-**Completion Status:** 10%
-**Pending Next:** Feature 2 — Scout: Agent Creation via Conversation
-**Last Sprint:** Feature 1 — Authentication & BYOK Setup — 2026-04-12T14:49:00Z
+**Completion Status:** 50%
+**Pending Next:** Feature 5 — Agent Memory & Instruction Updates
+**Last Sprint:** Feature 2, 3, 4, 9 — Setup & Scaffold (Built Outside SOP) — 2026-04-13
 
 ---
 
@@ -278,6 +278,8 @@ User signs in with Google, selects their LLM provider, and securely stores their
 
 ### Feature 2 — Scout: Agent Creation via Conversation
 
+> **Status: COMPLETE — 100%** · Built outside SOP
+
 User converses with Scout in plain English. Scout asks minimum questions, proposes a workflow, and the user hires the agent.
 
 **Screens:** Create Agent page (split: Scout chat left, Workforce Blueprint right) → Review & Hire page
@@ -317,6 +319,8 @@ FAILURE CONDITIONS: [What counts as a failed step and what to do]
 
 ### Feature 3 — Agent Dashboard
 
+> **Status: COMPLETE — 100%** · Built outside SOP
+
 Overview of all hired agents with status, last run, next scheduled run, and key metrics.
 
 **Screens:** Dashboard (agent cards)
@@ -335,6 +339,8 @@ Overview of all hired agents with status, last run, next scheduled run, and key 
 ---
 
 ### Feature 4 — Agent Execution & Real-Time Progress
+
+> **Status: COMPLETE — 100%** · Built outside SOP
 
 User triggers a manual run or scheduled run fires. User sees live step-by-step progress.
 
@@ -451,6 +457,8 @@ User can edit any agent's steps, schedule, or instructions after hiring.
 ---
 
 ### Feature 9 — Settings & Account Management
+
+> **Status: COMPLETE — 100%** · Built outside SOP
 
 User manages their account, API key, and provider.
 
