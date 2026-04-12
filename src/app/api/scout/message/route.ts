@@ -77,7 +77,7 @@ async function callLLM(opts: {
     'Claude 3 Haiku': 'claude-3-haiku-20240307',
     'Gemini 1.5 Pro': 'gemini-1.5-pro-latest',
     'Gemini 1.5 Flash': 'gemini-1.5-flash-latest',
-    'Llama 3': 'llama3-70b-8192',
+    'Llama 3': 'llama-3.3-70b-versatile',
     'Mixtral 8x7b': 'mixtral-8x7b-32768',
   };
   const apiModel = modelMapping[model] || model;
