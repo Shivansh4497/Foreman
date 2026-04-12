@@ -352,6 +352,9 @@ export default function DashboardPage() {
                             if (res.ok) {
                               const { run_id } = await res.json();
                               router.push(`/dashboard/run/${run_id}`);
+                            } else {
+                              const errData = await res.json();
+                              alert(`Failed to start run: ${errData.error || res.statusText}`);
                             }
                           }}
                           style={{
