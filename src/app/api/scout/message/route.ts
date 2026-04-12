@@ -67,7 +67,7 @@ async function callLLM(opts: {
   userTurn: string;
   expectJson?: boolean;
 }): Promise<string> {
-  const { provider, model, apiKey, systemPrompt, userTurn } = opts;
+  const { provider, model, apiKey, systemPrompt, userTurn, expectJson } = opts;
 
   // Map presentation names from user_llm_config to actual API model identifiers.
   const modelMapping: Record<string, string> = {
@@ -117,7 +117,13 @@ async function callLLM(opts: {
     }
 
     const data = await response.json();
-    return data.choices?.[0]?.message?.content ?? '';
+    let text = data.choices?.[0]?.message?.content ?? '';
+    
+    if (expectJson || text.trim().startsWith('```')) {
+      text = text.replace(/^```[a-z]*\n/, '').replace(/\n```$/, '').trim();
+    }
+    
+    return text;
   }
 
   // Anthropic path
@@ -142,7 +148,13 @@ async function callLLM(opts: {
   }
 
   const data = await response.json();
-  return data.content?.[0]?.text ?? '';
+  let text = data.content?.[0]?.text ?? '';
+  
+  if (expectJson || text.trim().startsWith('```')) {
+    text = text.replace(/^```[a-z]*\n/, '').replace(/\n```$/, '').trim();
+  }
+  
+  return text;
 }
 
 // ─── Layer 4: Context injection (per layer4_context_injection_spec.md) ────────
