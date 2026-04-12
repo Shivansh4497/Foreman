@@ -7,88 +7,56 @@ export async function POST(request: Request) {
     const authHeader = request.headers.get('Authorization');
     
     if (!authHeader) {
-      console.error('[API keys/save] Missing authorization header', { 
-        error: 'Missing Authorization header', 
-        provider, 
-        model 
-      });
+      console.error('[API keys/save] Missing authorization header');
       return NextResponse.json({ error: 'Missing authorization header' }, { status: 401 });
     }
 
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'http://127.0.0.1:54321';
-    const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || 'dummy_service_key';
-    
-    // Admin client correctly executes highly-privileged Vault inserts
-    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
+    const serviceClient = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    );
 
     const token = authHeader.replace('Bearer ', '');
     // Verify the user token validates to a real auth session
-    const { data: { user }, error: authError } = await supabaseAdmin.auth.getUser(token);
+    const { data: { user }, error: authError } = await serviceClient.auth.getUser(token);
 
     if (authError || !user) {
-      console.error('[API keys/save] Auth error', { 
-        error: authError?.message || 'No user returned',
-        code: authError?.status,
-        details: authError,
-        provider,
-        model 
-      });
+      console.error(`[API keys/save] Auth error: ${authError?.message || 'No user returned'}`);
       return NextResponse.json({ error: 'Unauthorized or invalid token' }, { status: 401 });
     }
 
-    // Insert into Supabase Vault using REST API
-    const { data: vaultData, error: vaultError } = await supabaseAdmin
-      .from('vault.secrets')
-      .insert({ secret: apiKey, name: `llm_key_${user.id}_${provider}` })
-      .select('id')
-      .single();
+    // Insert into Supabase Vault using Supabase's native insert_secret RPC
+    const { data: secretId, error: vaultError } = await serviceClient.rpc('insert_secret', {
+      name: `llm_key_${user.id}_${Date.now()}`,
+      secret: apiKey.trim(),
+      description: `LLM API Key for ${provider}`
+    });
 
-    if (vaultError || !vaultData) {
-      // If REST API fails, fallback to RPC vault_create_secret? No, user said "if that doesn't work use..." 
-      // I will implement the REST API as requested and add logs.
-      console.error('[API keys/save] Vault insertion error', {
-        error: vaultError?.message || 'No data returned',
-        code: vaultError?.code,
-        details: vaultError?.details,
-        hint: vaultError?.hint,
-        provider,
-        model,
-        userId: user.id
-      });
-      return NextResponse.json({ error: 'Failed to securely store API key in \nVault' }, { status: 500 });
+    if (vaultError || !secretId) {
+      console.error(`[API keys/save] Vault insertion error: ${vaultError?.message || 'Failed to get secret UUID'}`);
+      return NextResponse.json({ error: 'Failed to securely store API key in Vault' }, { status: 500 });
     }
 
-    // Upsert into user_llm_config
-    const { error: configError } = await supabaseAdmin
+    // Upsert into user_llm_config with the returned UUID
+    const { error: configError } = await serviceClient
       .from('user_llm_config')
       .upsert({
         user_id: user.id,
-        provider,
-        model,
-        vault_secret_id: vaultData.id,
+        provider: provider,
+        model: model,
+        vault_secret_id: secretId,
         updated_at: new Date().toISOString()
       }, { onConflict: 'user_id' });
 
     if (configError) {
-      console.error('[API keys/save] Config upsert error', {
-        error: configError.message,
-        code: configError.code,
-        details: configError.details,
-        provider,
-        model,
-        userId: user.id
-      });
+      console.error(`[API keys/save] Config upsert error: ${configError.message}`);
       return NextResponse.json({ error: 'Failed to update user configuration' }, { status: 500 });
     }
 
     return NextResponse.json({ success: true, message: 'Key saved securely in Vault.' });
     
   } catch (err: any) {
-    console.error('[API keys/save] Catch block error', {
-      error: err?.message || String(err),
-      code: err?.code,
-      details: err
-    });
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    console.error(`[API keys/save] Catch block error: ${err?.message || 'Unknown error'}`);
+    return NextResponse.json({ error: 'An unexpected error occurred while saving the key' }, { status: 500 });
   }
 }

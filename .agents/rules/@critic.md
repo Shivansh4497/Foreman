@@ -1,3 +1,7 @@
+---
+trigger: manual
+---
+
 # @critic — Audit Agent Contract
 
 ## Identity

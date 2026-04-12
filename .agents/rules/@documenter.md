@@ -1,3 +1,7 @@
+---
+trigger: manual
+---
+
 # @documenter — State Management Agent Contract
 
 ## Identity

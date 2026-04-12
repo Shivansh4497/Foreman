@@ -1,3 +1,7 @@
+---
+trigger: manual
+---
+
 # @builder — Execution Agent Contract
 
 ## Identity

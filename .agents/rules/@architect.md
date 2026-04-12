@@ -1,3 +1,7 @@
+---
+trigger: manual
+---
+
 # @architect — Blueprint Agent Contract
 
 ## Identity

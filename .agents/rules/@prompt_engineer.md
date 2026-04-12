@@ -1,3 +1,7 @@
+---
+trigger: manual
+---
+
 # @prompt_engineer — Prompt Engineering Agent Contract
 
 ## Identity
