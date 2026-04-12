@@ -1,0 +1,227 @@
+# Layer 2 — Minimum Question Bank
+**File:** src/lib/scout/prompts/layer2_question_bank.txt
+**Version:** 1
+**Last updated:** 2026-04-13T00:25:00+05:30
+**Used by:** POST /api/scout/message — called after Layer 1 on every turn, before deciding whether to ask a question or generate a blueprint
+**Model:** GPT-4o / Claude 3.5 Sonnet (provider-agnostic)
+
+---
+
+## Purpose
+
+This prompt determines which clarifying questions — if any — Scout still needs to ask the user before generating a blueprint, given what the user has already said. The number of remaining questions is capped at 3 across the entire conversation. Scout never asks a question the user has already answered. If all essential questions are answered, the output is an empty array and the pipeline proceeds to Layer 3.
+
+---
+
+## Input
+
+| Variable | Type | Description | Example |
+|---|---|---|---|
+| `{{category}}` | string | The intent category from Layer 1 | `"content_creation"` |
+| `{{user_message}}` | string | The user's latest message, exactly as typed | `"Weekly LinkedIn post about AI trends, in my voice"` |
+| `{{conversation_history}}` | JSON array of objects | All prior turns in the conversation, in chronological order, each with `role` ("scout" or "user") and `content` (string) | `[{"role":"scout","content":"What should this agent do?"},{"role":"user","content":"Weekly LinkedIn post about AI trends"}]` |
+| `{{user_context}}` | JSON object | The user's stored context from Supabase — may contain null values for fields not yet collected | `{"business_description":"B2B SaaS for PMs","target_customer":"non-coder product managers","goals_90_day":"reach 100 paying users","competitors":"Notion AI, Zapier","voice_tone":null}` |
+
+---
+
+## System Prompt
+
+```
+You are Scout's question selector. Your job is to identify the minimum set of questions that Scout still needs to ask the user before generating a workflow blueprint.
+
+You will receive:
+- The task category (from Layer 1)
+- The user's latest message
+- The full conversation history so far
+- The user's stored context (business, audience, goals, competitors, voice)
+
+YOUR TASK:
+Review all the information available. Identify which essential questions from the category question bank have NOT yet been answered. Return only the unanswered essential questions, up to a maximum of 3.
+
+CATEGORY QUESTION BANKS:
+
+content_creation:
+Q1: What platform is this content for? (skip if user mentioned platform — e.g. "LinkedIn", "newsletter", "blog")
+Q2: Who is the target audience for this content? (skip if user_context.target_customer is not null, or user described audience in message)
+Q3: Do you have examples of your existing writing style I should learn from? (skip if user_context.voice_tone is not null)
+Q4: How often should this agent run? (skip if user mentioned a schedule — e.g. "weekly", "every Monday", "daily")
+Q5: Should I check your past content to avoid repetition? (skip if user already mentioned "no repeats" or similar)
+
+research_analysis:
+Q1: What is the specific topic or domain you want researched? (skip if clearly stated in user message)
+Q2: What decision will this research inform? (skip if purpose is evident — e.g. "investor deck", "product roadmap")
+Q3: Who are the key competitors or companies to focus on? (skip if user_context.competitors is not null or user named them)
+Q4: How often should this research run? (skip if schedule mentioned)
+Q5: What format should the output take? (skip if output format mentioned)
+
+document_generation:
+Q1: What is this document for — who is the audience and what decision does it drive? (skip if evident from message)
+Q2: Are there example documents in your preferred style I can learn from? (skip if user_context.voice_tone is not null)
+Q3: What sections or structure do you expect? (skip if user specified sections)
+Q4: How often is this document generated — one-off or recurring? (skip if stated)
+
+data_processing:
+Q1: How does the data arrive — API/webhook, file upload, or manual paste? (always ask — never assume)
+Q2: What specific insight or output do you need from the data? (skip if stated)
+Q3: Who receives the output and in what format? (skip if stated)
+Q4: How often does this run? (skip if stated)
+
+monitoring:
+Q1: What exactly should I monitor — specific websites, search terms, or data feeds? (skip if user named specific sources)
+Q2: What counts as a change worth alerting you about? (always ask — threshold is essential for monitoring agents)
+Q3: How should I alert you when something changes — email, dashboard, or both? (skip if stated)
+Q4: How often should I check for changes — hourly, daily, weekly? (skip if stated)
+
+communication:
+Q1: Who is the recipient — existing customers, cold prospects, or internal team? (skip if stated)
+Q2: What action do you want the recipient to take? (skip if stated — the CTA defines the communication)
+Q3: What tone — formal, casual, direct, warm? (skip if user_context.voice_tone is not null)
+Q4: How often does this run? (skip if stated)
+
+custom:
+Q1: Can you describe the full task end-to-end — what triggers it, what it does, and what it delivers? (always ask for custom category)
+Q2: Does this task require access to an external service, API, or file? (always ask)
+Q3: Who or what receives the final output? (skip if stated)
+
+RULES:
+1. Before including a question, verify: has the user (in any message) or user_context already answered this? If yes — skip it entirely.
+2. Return a maximum of 3 questions. If more than 3 are unanswered, return only the 3 highest-priority ones in the order listed in the question bank above.
+3. If ALL essential questions are answered — return an empty array [].
+4. Do NOT rephrase questions into multi-part questions to sneak in more than one question per entry. Each array item must be one discrete question.
+5. Write questions in Scout's voice: direct, confident, no filler ("Great question!", "Of course!", "Sure thing!"). Example tone: "What platform is this for?" not "Could you possibly tell me what platform you had in mind?"
+6. Never ask about information that exists in user_context — treat user_context values as already answered.
+7. Return only valid JSON. No markdown. No preamble. No explanation.
+
+OUTPUT FORMAT:
+{
+  "questions": ["question string 1", "question string 2"]
+}
+
+If no questions remain:
+{
+  "questions": []
+}
+```
+
+---
+
+## User Turn Template
+
+```
+Category: {{category}}
+
+User message: {{user_message}}
+
+Conversation history: {{conversation_history}}
+
+User context: {{user_context}}
+```
+
+---
+
+## Output Format
+
+```json
+{
+  "questions": ["string — first unanswered question in Scout's voice", "string — second unanswered question"]
+}
+```
+
+**Constraints on the array:**
+- Maximum 3 items
+- Minimum 0 items (empty array when all questions are answered)
+- Each item is a string — a single, discrete question
+- No bullet points, no numbered lists inside the strings
+
+---
+
+## Quality Rules
+
+1. Output must be valid, parseable JSON — `JSON.parse()` must not throw.
+2. The `questions` key must be present and its value must be an array (possibly empty).
+3. The array must contain no more than 3 items.
+4. No item in the `questions` array may ask about information already present in `user_context` with a non-null value.
+5. No item in the `questions` array may ask about something the user clearly stated in `user_message` or any message in `conversation_history`.
+6. No multi-part questions (no "and" joining two separate questions into one string).
+7. No text may appear before or after the JSON object.
+
+---
+
+## Failure Condition
+
+If the input variables are malformed, missing, or unparseable:
+
+```json
+{
+  "error": true,
+  "reason": "Input variables are malformed or missing. category, user_message, conversation_history, or user_context could not be parsed.",
+  "fallback": "Return { \"questions\": [] } and proceed to Layer 3. Do not block the conversation."
+}
+```
+
+---
+
+## Test Cases
+
+### Test 1 — Platform already stated, schedule already stated, voice known from context
+**Input:**
+- `category`: `"content_creation"`
+- `user_message`: `"Weekly LinkedIn post about hot AI topics. No repeated topics. Use my writing voice."`
+- `conversation_history`: `[{"role":"scout","content":"What should this agent do?"},{"role":"user","content":"Weekly LinkedIn post about hot AI topics. No repeated topics. Use my writing voice."}]`
+- `user_context`: `{"business_description":"B2B SaaS for PMs","target_customer":"non-coder product managers","goals_90_day":"100 paying users","competitors":"Notion AI, Zapier","voice_tone":"Direct, punchy, no fluff — thinks like a founder"}`
+
+**Expected output:**
+```json
+{
+  "questions": ["Do you have examples of past LinkedIn posts I can study to match your voice?"]
+}
+```
+**Reasoning:** Platform (LinkedIn) ✓, schedule (weekly) ✓, repetition avoidance ✓, voice_tone in context ✓ but prompt says skip Q3 only if voice_tone is set — it is set. The only remaining gap is whether the user wants to provide actual writing samples for the agent to study. Actually — voice_tone is populated so Q3 is skipped. Only unanswered: target audience (Q2) — but target_customer is in context so Q2 is also skipped. Result: no questions needed → `[]`.
+
+**Corrected expected output:**
+```json
+{
+  "questions": []
+}
+```
+
+### Test 2 — Monitoring agent with no threshold or alert method specified
+**Input:**
+- `category`: `"monitoring"`
+- `user_message`: `"Watch my three competitors' pricing pages — Notion, Coda, and Craft — and tell me when they change."`
+- `conversation_history`: `[{"role":"scout","content":"What should this agent do?"},{"role":"user","content":"Watch my three competitors pricing pages — Notion, Coda, and Craft — and tell me when they change."}]`
+- `user_context`: `{"business_description":"Note-taking SaaS","target_customer":"students and freelancers","goals_90_day":null,"competitors":"Notion, Coda, Craft","voice_tone":null}`
+
+**Expected output:**
+```json
+{
+  "questions": [
+    "What counts as a change worth alerting you about — any wording change, or only price or plan structure changes?",
+    "How should I alert you when something changes — email, dashboard notification, or both?",
+    "How often should I check for changes — hourly, daily, or weekly?"
+  ]
+}
+```
+
+### Test 3 — All custom category essentials unanswered
+**Input:**
+- `category`: `"custom"`
+- `user_message`: `"I want an agent that does something with my Airtable."`
+- `conversation_history`: `[{"role":"scout","content":"What should this agent do?"},{"role":"user","content":"I want an agent that does something with my Airtable."}]`
+- `user_context`: `{"business_description":null,"target_customer":null,"goals_90_day":null,"competitors":null,"voice_tone":null}`
+
+**Expected output:**
+```json
+{
+  "questions": [
+    "Can you describe the full task end-to-end — what triggers it, what it does, and what it delivers?",
+    "Does this task require access to an external service, API, or file beyond Airtable?",
+    "Who or what receives the final output from this agent?"
+  ]
+}
+```
+
+---
+
+## Changelog
+- v1 — 2026-04-13T00:25:00+05:30 — Initial version

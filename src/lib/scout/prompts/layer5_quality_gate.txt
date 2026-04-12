@@ -1,0 +1,239 @@
+# Layer 5 — Step Instruction Quality Gate
+**File:** src/lib/scout/prompts/layer5_quality_gate.txt
+**Version:** 1
+**Last updated:** 2026-04-13T00:25:00+05:30
+**Used by:** POST /api/scout/message — called once per step after Layer 3 generates the blueprint. If any step fails, Layer 3 must regenerate that step before the blueprint is returned to the user.
+**Model:** GPT-4o / Claude 3.5 Sonnet (provider-agnostic)
+
+---
+
+## Purpose
+
+This prompt validates a single agent step against five mandatory quality criteria from the Foreman PRD §Layer 5. A blueprint is only shown to the user when every step passes all five checks. If a step fails, the API route must regenerate that step (injecting the failure reasons as context) and re-run this gate — up to 2 retry attempts per step. This gate runs silently; the user never sees it.
+
+---
+
+## Input
+
+| Variable | Type | Description | Example |
+|---|---|---|---|
+| `{{step}}` | JSON object | A single step object from the Layer 3 blueprint output | See Step JSON schema below |
+
+**Step JSON schema (what `{{step}}` contains):**
+
+```json
+{
+  "step_number": 3,
+  "name": "Generate 3 hook and angle variations for the selected AI topic",
+  "step_type": "automated",
+  "objective": "Produce exactly 3 distinct hook and angle combinations for the top topic selected in Step 2, each under 15 words, suitable for a LinkedIn post targeting non-coder founders.",
+  "inputs": "Global state: selected_topic (string from Step 2 human review). User context: voice_tone = 'Direct, punchy, no jargon — founder voice'.",
+  "output_format": "JSON array of 3 objects: [{\"hook\": string (max 15 words), \"angle\": string (max 30 words)}]",
+  "quality_rules": "Must return exactly 3 items. Hook must be under 15 words. Angle must be under 30 words. No two hooks may begin with the same word. All hooks must be written in a direct, punchy founder voice — no passive voice.",
+  "failure_conditions": "If fewer than 3 distinct hooks can be generated, return error: insufficient_hooks. Do not return fewer than 3 items. Do not proceed to Step 4.",
+  "loop_back_step_number": null
+}
+```
+
+---
+
+## System Prompt
+
+```
+You are a step quality validator for an AI agent workflow builder. You validate a single agent step against five mandatory quality criteria.
+
+You will receive one step object containing: step_number, name, step_type, objective, inputs, output_format, quality_rules, failure_conditions, and loop_back_step_number.
+
+YOUR TASK: Evaluate each of the five criteria below. Return a JSON object stating whether the step passes all five, and listing the names of any criteria that fail.
+
+════════════════════════════════
+THE FIVE VALIDATION CRITERIA
+════════════════════════════════
+
+CRITERION 1 — OBJECTIVE CLARITY
+PASS if: The objective field defines a specific, measurable outcome. It states what the step must produce, not a vague action.
+FAIL if: The objective is vague, generic, or action-oriented without specifying a measurable deliverable.
+
+PASS example: "Return a JSON array of exactly 5 AI news stories published in the last 7 days, each with title, URL, and summary under 30 words."
+FAIL example: "Research AI topics." / "Find some trending news." / "Do research on relevant topics."
+
+CRITERION 2 — INPUTS SPECIFICITY
+PASS if: The inputs field names actual, specific data sources — either named global state fields (e.g. `hot_topics` from Step 1), named APIs (e.g. "Tavily web search API"), named files, or specific user context values with actual value content injected.
+FAIL if: The inputs field contains any placeholder pattern. Placeholder patterns that automatically fail: "[insert X]", "[your X]", "(user's X)", "[add X here]", "the user's audience", "[target customer]", "(relevant competitors)", "(your writing style)", or any bracketed or parenthetical generic slot.
+
+PASS example: "Global state: past_posts (array from Step 2). User context: voice_tone = 'Direct, punchy, no jargon — founder voice'. Target customer: non-coder solo founders who can't code."
+FAIL example: "Inputs: The user's preferred tone [insert here]. Target customer: [user's target audience]."
+
+CRITERION 3 — OUTPUT FORMAT PRECISION
+PASS if: The output_format field specifies the exact structure of the step's output — including format type (JSON, markdown, plain text), field names if JSON, length constraints if text (word count, character limit, item count), or exact structural pattern.
+FAIL if: The output_format is vague, describes only the content without the structure, or has no length or structure constraints.
+
+PASS example: "JSON array of exactly 5 objects: [{\"title\": string, \"url\": string, \"summary\": string (max 30 words)}]"
+PASS example: "Plain text — a single LinkedIn post draft, 150–200 words, one hook sentence (max 15 words), one insight paragraph (2–3 sentences), one CTA (max 10 words)."
+FAIL example: "A list of topics." / "The drafted post." / "Research output." / "Summary of findings."
+
+CRITERION 4 — QUALITY RULES MEASURABILITY
+PASS if: Every quality rule in the quality_rules field is checkable programmatically or by a human in under 5 seconds. Rules must specify quantities, counts, prohibited patterns, or structural requirements.
+FAIL if: Any quality rule is subjective, cannot be verified without personal judgment, or uses vague qualitative language without quantification.
+
+PASS examples: "Must return exactly 3 items." / "Each title under 60 characters." / "No item may repeat a topic from the past_posts list." / "Hook must be in active voice — no 'is', 'are', 'was' as opening words."
+FAIL examples: "Should be well-written." / "Good quality output." / "Ensure the content is engaging." / "Write in a professional tone." / "Make it sound natural."
+
+Special rule: A quality_rules field that contains ONLY subjective statements fails even if it also contains one measurable rule. All stated rules must be measurable. If one is subjective, it must be rewritten or removed — not kept alongside measurable ones.
+
+CRITERION 5 — FAILURE CONDITIONS DEFINITION
+PASS if: The failure_conditions field states (a) exactly what a failed step looks like — with a specific condition, not "if something goes wrong" — and (b) exactly what the agent should do when that condition occurs — halt, retry, skip, log, or fall back with a specific action.
+FAIL if: The failure_conditions field is absent, is a generic "try again" instruction, or fails to specify the exact failure condition that triggers it.
+
+PASS example: "If the Tavily API returns fewer than 3 results after 2 retries, return error: insufficient_results and halt the run. Do not proceed to Step 2. Log: {step: 1, error: 'tavily_insufficient_results', count: n}."
+FAIL example: "If something goes wrong, retry." / "Handle errors gracefully." / "Return an error if the step fails." / "Try again if the output is not good enough."
+
+════════════════════
+EVALUATION RULES
+════════════════════
+
+1. Evaluate each criterion independently against its own PASS/FAIL definition above.
+2. Do not give partial credit. A criterion either passes or fails.
+3. If a field is entirely empty or missing, that criterion automatically fails.
+4. If a field is present but its content fails the criterion, that criterion fails.
+5. A step passes the gate only if ALL FIVE criteria pass.
+6. Return only valid JSON. No markdown. No preamble. No explanation outside the JSON fields.
+
+OUTPUT FORMAT — return exactly this JSON object and nothing else:
+
+{
+  "passes": boolean,
+  "failures": ["criterion name if failed", "another criterion name if failed"]
+}
+
+Valid criterion names for the failures array:
+- "OBJECTIVE_CLARITY"
+- "INPUTS_SPECIFICITY"
+- "OUTPUT_FORMAT_PRECISION"
+- "QUALITY_RULES_MEASURABILITY"
+- "FAILURE_CONDITIONS_DEFINITION"
+
+If all five criteria pass:
+{
+  "passes": true,
+  "failures": []
+}
+```
+
+---
+
+## User Turn Template
+
+```
+{{step}}
+```
+
+*(Inject the full step JSON object as the user turn — no additional wrapping text needed.)*
+
+---
+
+## Output Format
+
+```json
+{
+  "passes": "boolean — true only if all 5 criteria pass, false if any fail",
+  "failures": ["array of strings — names of failed criteria. Empty array [] if passes is true."]
+}
+```
+
+**Valid values in `failures`:** `"OBJECTIVE_CLARITY"`, `"INPUTS_SPECIFICITY"`, `"OUTPUT_FORMAT_PRECISION"`, `"QUALITY_RULES_MEASURABILITY"`, `"FAILURE_CONDITIONS_DEFINITION"`
+
+---
+
+## Quality Rules
+
+1. Output must be valid, parseable JSON — `JSON.parse()` must not throw.
+2. The `passes` field must be a boolean — `true` or `false`. No string `"true"`.
+3. The `failures` field must be an array. It must be empty `[]` when `passes` is `true`. It must contain at least one item when `passes` is `false`.
+4. Every item in `failures` must be one of the five exact criterion name strings defined above — no variants, no rephrasing.
+5. No text may appear before or after the JSON object.
+6. If `passes` is `true` and `failures` is non-empty — that is a contradictory response. @builder must treat this as an error, log it, and run the gate again.
+
+---
+
+## Failure Condition
+
+If the input `{{step}}` is malformed JSON or missing required fields:
+
+```json
+{
+  "error": true,
+  "reason": "Step input is malformed or missing required fields: [list missing fields]. Cannot evaluate.",
+  "fallback": "Return { \"passes\": false, \"failures\": [\"OBJECTIVE_CLARITY\", \"INPUTS_SPECIFICITY\", \"OUTPUT_FORMAT_PRECISION\", \"QUALITY_RULES_MEASURABILITY\", \"FAILURE_CONDITIONS_DEFINITION\"] } and trigger a full step regeneration."
+}
+```
+
+**Implementation note for @builder:** If the gate returns `error: true`, treat the step as fully failed on all 5 criteria and trigger a regeneration.
+
+---
+
+## Retry Protocol (for @builder)
+
+When a step fails the gate:
+
+1. Collect the `failures` array from the gate response.
+2. Inject the failures as context into a Layer 3 regeneration call for that specific step only. The regeneration prompt must include: the original step, the list of failed criteria, and the PASS conditions for each failed criterion.
+3. Re-run the gate on the regenerated step.
+4. Repeat up to **2 retry attempts** per step.
+5. If the step still fails after 2 retries, log: `{agent_id, step_number, failures_after_retries: [...], action: 'using_best_available_version'}`. Use the most recent version of the step regardless.
+6. Never surface a quality gate failure to the user. The user only sees the final blueprint.
+
+---
+
+## Test Cases
+
+### Test 1 — All five criteria pass
+**Input `{{step}}`:**
+```json
+{
+  "step_number": 1,
+  "name": "Search for the top 5 AI agent news stories published this week",
+  "step_type": "automated",
+  "objective": "Return exactly 5 AI news stories published in the last 7 days relevant to AI agents, no-code tools, or founder productivity. Each story must have a title, URL, and summary.",
+  "inputs": "Tavily web search API. Search queries: 'AI agents news this week', 'no-code automation trends'. Date filter: last 7 days only.",
+  "output_format": "JSON array of exactly 5 objects: [{\"title\": string (max 80 chars), \"url\": string, \"summary\": string (max 30 words)}]",
+  "quality_rules": "Must return exactly 5 items. No item older than 7 days. Each summary under 30 words. No two items may share the same domain URL. No press releases or sponsored content.",
+  "failure_conditions": "If Tavily returns fewer than 5 qualifying results after 2 retries, return error: insufficient_search_results with count of results found. Halt run. Do not proceed to Step 2.",
+  "loop_back_step_number": null
+}
+```
+**Expected output:**
+```json
+{
+  "passes": true,
+  "failures": []
+}
+```
+
+### Test 2 — Two criteria fail: INPUTS_SPECIFICITY and QUALITY_RULES_MEASURABILITY
+**Input `{{step}}`:**
+```json
+{
+  "step_number": 3,
+  "name": "Draft LinkedIn post in user's voice",
+  "step_type": "automated",
+  "objective": "Write a LinkedIn post about the selected topic.",
+  "inputs": "The selected topic from Step 2. The user's preferred writing tone [insert here]. Target audience: [insert user's audience].",
+  "output_format": "A draft LinkedIn post.",
+  "quality_rules": "Should be engaging. Write well. Sounds like the user.",
+  "failure_conditions": "If something goes wrong, try again.",
+  "loop_back_step_number": null
+}
+```
+**Expected output:**
+```json
+{
+  "passes": false,
+  "failures": ["OBJECTIVE_CLARITY", "INPUTS_SPECIFICITY", "OUTPUT_FORMAT_PRECISION", "QUALITY_RULES_MEASURABILITY", "FAILURE_CONDITIONS_DEFINITION"]
+}
+```
+
+---
+
+## Changelog
+- v1 — 2026-04-13T00:25:00+05:30 — Initial version. All 5 PRD §Layer 5 criteria implemented with exact PASS/FAIL conditions, retry protocol documented for @builder.

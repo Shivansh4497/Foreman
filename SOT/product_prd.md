@@ -1,10 +1,10 @@
 # Foreman — Product Requirements Document
 
 **Version:** 1.0.0
-**Status:** PRE-BUILD
-**Completion Status:** 0%
-**Pending Next:** Feature 1 — Authentication & BYOK Setup
-**Last Sprint:** None
+**Status:** IN PROGRESS
+**Completion Status:** 10%
+**Pending Next:** Feature 2 — Scout: Agent Creation via Conversation
+**Last Sprint:** Feature 1 — Authentication & BYOK Setup — 2026-04-12T14:49:00Z
 
 ---
 
@@ -260,17 +260,19 @@ Two distinct layers — both stored in Supabase:
 
 ### Feature 1 — Authentication & BYOK Setup
 
+> **Status: COMPLETE — 100%** · Deployed: foreman-green.vercel.app · Sprint closed: 2026-04-12
+
 User signs in with Google, selects their LLM provider, and securely stores their API key.
 
 **Screens:** Landing page → Google sign-in → Onboarding (provider selection + API key input) → Dashboard
 
 **Acceptance criteria:**
 
-- Google OAuth flow completes and creates user record in Supabase
-- User selects provider (OpenAI / Anthropic / Gemini / Groq) and model
-- API key is encrypted via Supabase Vault — plaintext never stored in any table
-- User is redirected to empty dashboard on completion
-- User can update their API key and provider from Settings at any time
+- ✅ Google OAuth flow completes and creates user record in Supabase
+- ✅ User selects provider (OpenAI / Anthropic / Gemini / Groq) and model
+- ✅ API key is encrypted via Supabase Vault — plaintext never stored in any table
+- ✅ User is redirected to empty dashboard on completion
+- ✅ User can update their API key and provider from Settings at any time
 
 ---
 

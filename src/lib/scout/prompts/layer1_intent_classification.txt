@@ -1,0 +1,141 @@
+# Layer 1 — Intent Classification
+**File:** src/lib/scout/prompts/layer1_intent_classification.txt
+**Version:** 1
+**Last updated:** 2026-04-13T00:25:00+05:30
+**Used by:** POST /api/scout/message — called before any Scout reply is generated, on every user message turn
+**Model:** GPT-4o / Claude 3.5 Sonnet (provider-agnostic; prompt engineered for either)
+
+---
+
+## Purpose
+
+This prompt silently classifies the user's first message into one of seven predefined task categories. The output is used by Layer 2 to select the correct question bank and by Layer 3 to select the correct workflow template. No explanation is returned — only a JSON object. The classification is deterministic: one input produces exactly one category. If the user's message fits multiple categories, the primary intent wins.
+
+---
+
+## Input
+
+| Variable | Type | Description | Example |
+|---|---|---|---|
+| `{{user_message}}` | string | The user's raw first message to Scout, exactly as typed | "I want a weekly LinkedIn post about AI topics in my voice, no repeats" |
+
+---
+
+## System Prompt
+
+```
+You are an intent classification engine. You classify user task descriptions into exactly one category.
+
+You will receive a single user message describing a task they want an AI agent to perform.
+
+Your task: classify the message into exactly one of the following seven categories.
+
+CATEGORIES:
+- content_creation: Tasks producing written content for publishing — LinkedIn posts, newsletters, blog posts, social content, YouTube scripts, article drafts
+- research_analysis: Tasks that gather, synthesise, or analyse information — competitor research, market analysis, trend reports, industry summaries
+- document_generation: Tasks producing structured internal documents — PRDs, proposals, SOPs, briefs, reports, meeting notes, project specs
+- data_processing: Tasks that process structured data files or feeds — NPS analysis, survey result analysis, sales data processing, spreadsheet operations, CSV transformation
+- monitoring: Tasks that watch for changes and alert — price tracking, job posting alerts, news monitoring, website change detection, mention tracking
+- communication: Tasks producing or automating outgoing communication — email drafts, follow-up sequences, meeting summaries, outreach campaigns
+- custom: Any task that does not clearly fit the above six categories
+
+CLASSIFICATION RULES:
+1. Read the entire message before deciding.
+2. Choose the category that best matches the PRIMARY intent of the task.
+3. If the message is ambiguous between two categories, choose the more specific one. Example: "draft a weekly email newsletter about SaaS trends" → content_creation (not communication), because the primary output is publishable content, not a direct communication to a specific recipient.
+4. Never choose "custom" if another category is a reasonable fit.
+5. Never explain your reasoning.
+6. Never ask a question.
+7. Return only valid JSON. No markdown. No preamble. No trailing text.
+
+OUTPUT FORMAT — return exactly this JSON object and nothing else:
+{
+  "category": "<one of the seven category strings above>"
+}
+```
+
+---
+
+## User Turn Template
+
+```
+{{user_message}}
+```
+
+---
+
+## Output Format
+
+The LLM must return exactly one JSON object with exactly one key. No markdown code fence. No explanation. No extra whitespace beyond standard JSON formatting.
+
+```json
+{
+  "category": "string — exactly one of: content_creation | research_analysis | document_generation | data_processing | monitoring | communication | custom"
+}
+```
+
+**Valid values for `category`:** `content_creation`, `research_analysis`, `document_generation`, `data_processing`, `monitoring`, `communication`, `custom`
+
+---
+
+## Quality Rules
+
+1. Output must be valid, parseable JSON — `JSON.parse()` must not throw.
+2. The `category` field must be present and must be exactly one of the seven allowed strings — no capitalisation variants, no spaces, no other values.
+3. No other keys may appear in the output object.
+4. No text may appear before or after the JSON object.
+5. Classification must match the primary intent — not a secondary feature of the task.
+
+---
+
+## Failure Condition
+
+If the user message is empty, gibberish, or contains no identifiable task intent:
+
+```json
+{
+  "error": true,
+  "reason": "User message contains no classifiable task intent. Message is empty, too short, or not a task description.",
+  "fallback": "Return category 'custom' and proceed. Do not block the conversation. Scout will ask the user to clarify what task they want the agent to perform."
+}
+```
+
+**Implementation note for @builder:** If the API returns `error: true`, treat it as `category: "custom"` and continue the pipeline. Never surface this error to the user.
+
+---
+
+## Test Cases
+
+### Test 1 — Clear content creation intent
+**Input:** `"I want an agent that finds hot AI topics every week and writes a LinkedIn post in my voice. No topics I've covered before."`
+**Expected output:**
+```json
+{ "category": "content_creation" }
+```
+
+### Test 2 — Clear monitoring intent
+**Input:** `"Track my three main competitors' pricing pages and alert me the moment anything changes."`
+**Expected output:**
+```json
+{ "category": "monitoring" }
+```
+
+### Test 3 — Ambiguous research vs. document generation — primary intent is document
+**Input:** `"Research our top 5 competitors and write a full analysis report I can share with investors."`
+**Expected output:**
+```json
+{ "category": "document_generation" }
+```
+**Reasoning:** The primary deliverable is a structured shareable document, not just a research summary for internal decision-making.
+
+### Test 4 — Data processing
+**Input:** `"Every month take our NPS survey CSV, find the themes in responses, and give me a summary of what customers love and hate."`
+**Expected output:**
+```json
+{ "category": "data_processing" }
+```
+
+---
+
+## Changelog
+- v1 — 2026-04-13T00:25:00+05:30 — Initial version

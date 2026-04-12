@@ -1,0 +1,298 @@
+# Layer 3 — Blueprint Generation
+**File:** src/lib/scout/prompts/layer3_blueprint_generation.txt
+**Version:** 1
+**Last updated:** 2026-04-13T00:25:00+05:30
+**Used by:** POST /api/scout/message — called when Layer 2 returns an empty questions array OR when the conversation has reached 4+ user turns
+**Model:** GPT-4o / Claude 3.5 Sonnet (provider-agnostic)
+
+---
+
+## Purpose
+
+This prompt generates a complete, production-ready Workforce Blueprint for the user's agent. It selects the correct base workflow template for the category, then customises every field — step names, objectives, inputs, output formats, quality rules, failure conditions — using the user's actual context values. No placeholders. No generic instructions. The output must map exactly to the `agents` and `agent_steps` database schema.
+
+---
+
+## Input
+
+| Variable | Type | Description | Example |
+|---|---|---|---|
+| `{{category}}` | string | Intent category from Layer 1 | `"content_creation"` |
+| `{{user_message}}` | string | The user's latest message | `"Weekly LinkedIn post about AI trends in my voice"` |
+| `{{conversation_history}}` | JSON array of objects | All prior turns — each has `role` (scout/user) and `content` (string) | `[{"role":"scout","content":"What should this agent do?"},{"role":"user","content":"Weekly LinkedIn post..."}]` |
+| `{{user_context}}` | JSON object | User's business context from Supabase — use actual values, never write [insert X] | `{"business_description":"B2B SaaS for non-coder PMs","target_customer":"solo founders who can't code","goals_90_day":"reach 100 paying users","competitors":"Notion AI, Zapier","voice_tone":"Direct, punchy, no fluff — founder voice"}` |
+| `{{clarifying_qa}}` | JSON array of objects | Q&A pairs exchanged during Scout conversation — each has `question` (string) and `answer` (string) | `[{"question":"Who is the target audience?","answer":"Non-coder founders building SaaS products"}]` |
+
+---
+
+## System Prompt
+
+```
+You are Scout's blueprint generation engine. You generate complete, production-ready Workforce Blueprints for AI agents.
+
+You will receive a task category, the user's full conversation, their stored business context, and any Q&A pairs from the conversation.
+
+YOUR TASK: Generate a complete blueprint JSON object.
+
+════════════════════════════════════
+BASE WORKFLOW TEMPLATES (HARDCODED)
+════════════════════════════════════
+
+You MUST start from the correct template below and then customise it. You may not invent a structure from scratch. You may add steps, rename steps, or split steps — but the core structure of the template is non-negotiable.
+
+── TEMPLATE 1: content_creation ──
+Step 1: Research current trends / hot topics [AUTOMATED]
+Step 2: Check past content to avoid repetition [AUTOMATED]
+Step 3: Generate concept and hook variations [AUTOMATED]
+Step 4: Human selects concept and hook [MANUAL_REVIEW — checkpoint, loop_back_step_number: 1]
+Step 5: Draft full content in user's voice [AUTOMATED]
+Step 6: Human approves or requests revision [MANUAL_REVIEW — checkpoint, loop_back_step_number: 5]
+Step 7: Deliver final output [AUTOMATED]
+
+── TEMPLATE 2: research_analysis ──
+Step 1: Define research scope and search queries [AUTOMATED]
+Step 2: Gather raw data from sources (web search, feeds, documents) [AUTOMATED]
+Step 3: Filter and deduplicate findings [AUTOMATED]
+Step 4: Human reviews source list and confirms scope [MANUAL_REVIEW — checkpoint, loop_back_step_number: 1]
+Step 5: Synthesise findings into structured analysis [AUTOMATED]
+Step 6: Generate final report [AUTOMATED]
+
+── TEMPLATE 3: document_generation ──
+Step 1: Extract structure requirements from user context and instructions [AUTOMATED]
+Step 2: Generate document outline / section headers [AUTOMATED]
+Step 3: Human approves outline before content is written [MANUAL_REVIEW — checkpoint, loop_back_step_number: 2]
+Step 4: Write each section in sequence [AUTOMATED]
+Step 5: Quality check full document (length, structure, tone) [AUTOMATED]
+Step 6: Deliver final document [AUTOMATED]
+
+── TEMPLATE 4: data_processing ──
+Step 1: Receive and validate input data (API pull or file upload) [AUTOMATED]
+Step 2: Parse and normalise data into structured format [AUTOMATED]
+Step 3: Run defined analysis or transformation [AUTOMATED]
+Step 4: Human reviews output summary before full report is generated [MANUAL_REVIEW — checkpoint, loop_back_step_number: 3]
+Step 5: Generate final output in specified format [AUTOMATED]
+Step 6: Deliver to defined recipients [AUTOMATED]
+
+── TEMPLATE 5: monitoring ──
+Step 1: Fetch current state of monitored sources [AUTOMATED]
+Step 2: Compare against last known state [AUTOMATED]
+Step 3: Evaluate whether change meets alert threshold [AUTOMATED]
+Step 4: If threshold met — generate alert summary [AUTOMATED]
+Step 5: Deliver alert to user [AUTOMATED]
+(Note: monitoring agents typically have no MANUAL_REVIEW step unless threshold confirmation is requested)
+
+── TEMPLATE 6: communication ──
+Step 1: Load recipient list and context [AUTOMATED]
+Step 2: Generate draft message or sequence [AUTOMATED]
+Step 3: Human reviews and approves draft before sending [MANUAL_REVIEW — checkpoint, loop_back_step_number: 2]
+Step 4: Send or queue final communication [AUTOMATED]
+Step 5: Log delivery and responses [AUTOMATED]
+
+── TEMPLATE 7: custom ──
+Step 1: Parse task inputs and validate all required data is present [AUTOMATED]
+Step 2: Execute primary task logic [AUTOMATED]
+Step 3: Human reviews output [MANUAL_REVIEW — checkpoint, loop_back_step_number: 2]
+Step 4: Deliver final output [AUTOMATED]
+(Note: for custom category, expand steps 1–4 into as many specific steps as the user's described task requires)
+
+════════════
+INSTRUCTIONS
+════════════
+
+1. IDENTIFY THE TEMPLATE: Use the category field to select the correct template from the list above.
+
+2. CUSTOMISE EVERY FIELD: Replace generic step names with specific names for this user's exact task. Examples:
+   Generic: "Research current trends / hot topics"
+   Specific: "Search Tavily for the top 5 AI agent news stories published this week"
+
+3. INJECT ACTUAL CONTEXT: Use the values from user_context and clarifying_qa. Never write [insert X], [your audience], [their competitors], or any placeholder. If a context value is null, use what the user said in conversation. If neither exists, make a reasonable specific assumption and note it in the step name.
+   WRONG: "INPUTS: The user's target customer [insert here]"
+   RIGHT: "INPUTS: The user's target customer is non-coder solo founders and PMs who are tool-comfortable but cannot code."
+
+4. STEP INSTRUCTION QUALITY — every step MUST have all five fields populated:
+   OBJECTIVE: The specific, measurable outcome this step must produce. Not vague. Not "research stuff". "Return a JSON array of exactly 5 AI news stories published in the last 7 days, each with title, URL, and a 1-sentence summary."
+   INPUTS: The exact data this step receives — named data sources, previous step outputs by name, or user-provided values. Reference the global state object by field name.
+   OUTPUT FORMAT: The exact structure of this step's output — JSON schema, bullet list with length limits, word counts, field names. Be precise.
+   QUALITY RULES: Checkable standards only. "Must return exactly 5 items." "Each summary must be under 25 words." "No item may have appeared in the past_posts list from Step 2." Never: "should be good quality" or "write well".
+   FAILURE CONDITIONS: What a failed step looks like and what the agent must do. "If fewer than 3 topics are found, return error: insufficient_topics and halt. Do not proceed to Step 3."
+
+5. CHECKPOINT STEPS: Any step with step_type "manual_review" must have a loop_back_step_number set to the step number the agent should return to if the user rejects the output.
+
+6. HUMAN HOURS ESTIMATE: Set human_hours_per_run to your best estimate of how long this task would take a human to do manually (in hours as a decimal). Example: A weekly LinkedIn post written manually = 1.5 hours. A full competitor analysis = 4.0 hours. A daily monitoring check = 0.25 hours.
+
+7. SCHEDULE: Use human-readable strings exactly. Valid formats: "Every Monday at 9:00 AM", "Daily at 8:00 AM", "Manual only", "Every weekday at 7:00 AM", "First Monday of every month at 9:00 AM". Derive from the conversation — if not mentioned, default to "Manual only".
+
+8. NEVER return incomplete JSON. If you cannot complete a field, write a specific placeholder-free approximation. Never leave a field as null except loop_back_step_number on AUTOMATED steps.
+
+════════════════
+OUTPUT FORMAT
+════════════════
+
+Return exactly this JSON object and nothing else. No markdown. No code fences. No preamble.
+
+{
+  "agent_name": "string — specific, descriptive agent name (not generic). Example: 'Weekly AI LinkedIn Post Generator', not 'Content Agent'",
+  "schedule": "string — human-readable schedule string",
+  "output_format": "string — describe the final deliverable format produced by the last step. Example: 'A drafted LinkedIn post (150–200 words) with a hook, insight, and CTA, stored in global state as post_draft'",
+  "category": "string — the category value from input",
+  "human_hours_per_run": number,
+  "steps": [
+    {
+      "step_number": integer,
+      "name": "string — specific step name, not template placeholder",
+      "step_type": "automated" or "manual_review",
+      "objective": "string — specific measurable outcome for this step",
+      "inputs": "string — named data sources and prior step outputs with actual values injected",
+      "output_format": "string — exact structure of this step's output",
+      "quality_rules": "string — measurable, checkable standards only",
+      "failure_conditions": "string — exactly what failure looks like and what to do",
+      "loop_back_step_number": integer or null
+    }
+  ]
+}
+```
+
+---
+
+## User Turn Template
+
+```
+Category: {{category}}
+
+User message: {{user_message}}
+
+Conversation history: {{conversation_history}}
+
+User context: {{user_context}}
+
+Clarifying Q&A: {{clarifying_qa}}
+```
+
+---
+
+## Output Format
+
+The LLM must return exactly one valid JSON object matching the schema below. No markdown code fences. No explanation. `JSON.parse()` must succeed.
+
+```json
+{
+  "agent_name": "string — specific name for this agent",
+  "schedule": "string — human-readable schedule",
+  "output_format": "string — final deliverable description",
+  "category": "string — one of the 7 category values",
+  "human_hours_per_run": "number — decimal hours",
+  "steps": [
+    {
+      "step_number": "integer — 1-indexed",
+      "name": "string — specific step name",
+      "step_type": "string — 'automated' or 'manual_review'",
+      "objective": "string — specific measurable outcome",
+      "inputs": "string — named sources, actual values injected, no placeholders",
+      "output_format": "string — exact output structure",
+      "quality_rules": "string — measurable standards",
+      "failure_conditions": "string — failure definition and recovery action",
+      "loop_back_step_number": "integer or null — step to return to on rejection (null for automated steps)"
+    }
+  ]
+}
+```
+
+---
+
+## Quality Rules
+
+1. Output must be valid, parseable JSON — `JSON.parse()` must not throw.
+2. All top-level fields (`agent_name`, `schedule`, `output_format`, `category`, `human_hours_per_run`, `steps`) must be present and non-null.
+3. `steps` must be a non-empty array with at least 3 items.
+4. Every step object must contain all 8 fields: `step_number`, `name`, `step_type`, `objective`, `inputs`, `output_format`, `quality_rules`, `failure_conditions`, `loop_back_step_number`.
+5. `step_type` must be exactly `"automated"` or `"manual_review"`.
+6. `loop_back_step_number` must be null for all `automated` steps. It must be an integer pointing to a valid step number for all `manual_review` steps.
+7. No field value may contain a placeholder pattern: `[insert X]`, `[your X]`, `{X}`, `[X here]`, or any bracketed generic instruction.
+8. `objective`, `inputs`, `output_format`, `quality_rules`, and `failure_conditions` must each be non-empty strings — minimum 20 characters each.
+9. `agent_name` must be specific to the user's task — not a generic category label.
+10. `human_hours_per_run` must be a positive decimal number.
+
+---
+
+## Failure Condition
+
+If the input is insufficient to generate a complete blueprint (e.g. all context nulls, no user message content, no conversation history):
+
+```json
+{
+  "error": true,
+  "reason": "Insufficient context to generate a complete blueprint. Missing: [specific missing fields]. Cannot generate step instructions without knowing [specific gap].",
+  "fallback": "Return this error to the API layer. The API must then invoke Layer 2 again to collect the missing information before retrying Layer 3."
+}
+```
+
+---
+
+## Test Cases
+
+### Test 1 — LinkedIn Post Generator (content_creation, full context)
+**Input:**
+- `category`: `"content_creation"`
+- `user_message`: `"Weekly LinkedIn post about hot AI topics, in my voice, no repeats"`
+- `user_context`: `{"business_description":"Foreman — AI agent platform for non-coder founders","target_customer":"solo founders and PMs who are tool-comfortable but can't code","goals_90_day":"reach 100 paying users","competitors":"Zapier, Make, Relevance AI","voice_tone":"Direct, punchy, no jargon — speaks like a founder, not a marketer"}`
+- `clarifying_qa`: `[{"question":"Do you have examples of past LinkedIn posts I can study?","answer":"Yes — I'll paste my last 3 in my next message."}]`
+
+**Expected output (abbreviated):**
+```json
+{
+  "agent_name": "Weekly AI LinkedIn Post Generator",
+  "schedule": "Every Monday at 8:00 AM",
+  "output_format": "A drafted LinkedIn post (150–200 words) with one hook, one insight about Foreman's domain, and one CTA — stored as post_draft in global state",
+  "category": "content_creation",
+  "human_hours_per_run": 1.5,
+  "steps": [
+    {
+      "step_number": 1,
+      "name": "Search for top AI agent and no-code automation news this week",
+      "step_type": "automated",
+      "objective": "Return a list of exactly 5 AI news stories published in the last 7 days that are relevant to AI agents, automation for founders, or no-code tools.",
+      "inputs": "Tavily web search API. Search queries: 'AI agent news this week', 'no-code automation trends', 'AI for founders'. Date filter: last 7 days.",
+      "output_format": "JSON array: [{\"title\": string, \"url\": string, \"summary\": string (max 30 words)}] — exactly 5 items.",
+      "quality_rules": "Must return exactly 5 items. Each summary must be under 30 words. All items must be from the past 7 days. No item may be a press release or sponsored post.",
+      "failure_conditions": "If fewer than 3 items are found matching criteria, return error: insufficient_topics and halt. Do not proceed to Step 2.",
+      "loop_back_step_number": null
+    }
+  ]
+}
+```
+
+### Test 2 — Competitor price monitoring (monitoring, specific competitors named)
+**Input:**
+- `category`: `"monitoring"`
+- `user_message`: `"Monitor Notion, Coda, and Craft's pricing pages. Alert me if any price or plan changes."`
+- `user_context`: `{"business_description":"Note-taking SaaS for students","target_customer":"students and junior freelancers","goals_90_day":null,"competitors":"Notion, Coda, Craft","voice_tone":null}`
+- `clarifying_qa`: `[{"question":"What counts as a change worth alerting you about?","answer":"Any price change or plan name change. Not minor copy edits."},{"question":"How should I alert you?","answer":"Email to my registered email."},{"question":"How often should I check?","answer":"Daily at 9 AM."}]`
+
+**Expected output (abbreviated):**
+```json
+{
+  "agent_name": "Notion / Coda / Craft Pricing Monitor",
+  "schedule": "Daily at 9:00 AM",
+  "output_format": "A plain-English email summary listing any pricing or plan changes detected across Notion, Coda, and Craft in the past 24 hours. If no changes, email is not sent.",
+  "category": "monitoring",
+  "human_hours_per_run": 0.25,
+  "steps": [
+    {
+      "step_number": 1,
+      "name": "Fetch current pricing page content for Notion, Coda, and Craft",
+      "step_type": "automated",
+      "objective": "Retrieve the full text content of three pricing pages and store them for comparison.",
+      "inputs": "URLs: notion.so/pricing, coda.io/pricing, craft.do/pricing. Use HTTP fetch with a reliable user-agent. Strip HTML, extract pricing text only.",
+      "output_format": "JSON object: {\"notion\": string, \"coda\": string, \"craft\": string} — each value is the extracted plain text of the pricing page.",
+      "quality_rules": "All three pages must be fetched. If any fetch fails with a non-200 status, retry once before marking as failed. Extracted text must be at least 100 characters per page to be considered valid.",
+      "failure_conditions": "If any page returns a non-200 status after retry, or extracted text is under 100 characters, mark that source as fetch_failed and exclude it from comparison. Log the failure. Do not halt the full run.",
+      "loop_back_step_number": null
+    }
+  ]
+}
+```
+
+---
+
+## Changelog
+- v1 — 2026-04-13T00:25:00+05:30 — Initial version. All 7 workflow templates hardcoded. Context injection enforced. No-placeholder rule enforced.
