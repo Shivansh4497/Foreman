@@ -778,7 +778,7 @@ Clarifying Q&A: ${JSON.stringify(clarifyingQA)}`;
     } catch (err) {
       const errMsg = err instanceof Error ? err.message : 'Unknown';
       console.error(`[scout/message] Layer 3 error: ${errMsg}`);
-      return NextResponse.json({ error: 'Blueprint generation failed' }, { status: 500 });
+      return NextResponse.json({ error: `Blueprint generation failed: ${errMsg}` }, { status: 500 });
     }
 
     if (!blueprint || !Array.isArray(blueprint.steps) || blueprint.steps.length === 0) {
