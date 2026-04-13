@@ -567,31 +567,52 @@ function ConversationInner() {
         });
       }
 
-      // 3. Constant Recovery (if not already set)
-      setActiveRunId(current => {
-        if (!current) {
-          supabase
-            .from('agent_runs')
-            .select('id')
-            .eq('agent_id', agentId)
-            .in('status', ['running', 'waiting_for_human'])
-            .order('created_at', { ascending: false })
-            .limit(1)
-            .maybeSingle()
-            .then(({ data: activeRunData }) => {
-              if (activeRunData) {
-                setActiveRunId(activeRunData.id);
-              }
-            });
-        }
-        return current;
-      });
+      // 3. Status Check for Header Sync
+      if (agentData?.status === 'running' && !activeRunId) {
+        console.log('[Sync] Agent is running in DB but no activeRunId in state. Triggering recovery...');
+      }
     }
 
     fetchData();
     const interval = setInterval(fetchData, 3000);
     return () => clearInterval(interval);
+  }, [agentId, activeRunId]);
+
+  // Dedicated Run Recovery Effect (Stable)
+  useEffect(() => {
+    async function recoverActiveRun() {
+      if (activeRunId && activeRunId !== 'starting') return;
+
+      console.log('[Sync] Searching for active runs for agent:', agentId);
+      const { data: activeRunData, error } = await supabase
+        .from('agent_runs')
+        .select('id, status')
+        .eq('agent_id', agentId)
+        .in('status', ['running', 'waiting_for_human'])
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (error) {
+        console.error('[Sync] Recovery error:', error);
+        return;
+      }
+
+      if (activeRunData) {
+        console.log('[Sync] Active run recovered:', activeRunData.id);
+        setActiveRunId(activeRunData.id);
+      } else {
+        console.log('[Sync] No active runs found in database.');
+      }
+    }
+
+    recoverActiveRun();
   }, [agentId]);
+
+  // Debug Logging State Transitions
+  useEffect(() => {
+    console.log('[Sync] activeRunId state changed:', activeRunId);
+  }, [activeRunId]);
 
   // Handle Autorun
   useEffect(() => {
