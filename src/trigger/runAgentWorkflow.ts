@@ -291,7 +291,7 @@ Perform the objective now. Output ONLY what is requested in the OUT FORMAT. Do n
         (Date.now() - new Date(run.created_at).getTime()) / 1000
       );
 
-      await supabase.from('agent_conversations').insert({
+      const { error: insertErr } = await supabase.from('agent_conversations').insert({
         agent_id: run.agent_id,
         user_id: run.user_id,
         run_id: run.id,
@@ -308,9 +308,18 @@ Perform the objective now. Output ONLY what is requested in the OUT FORMAT. Do n
           steps: stepsArray
         }
       });
-      logger.info("Posted run_card to agent_conversations");
+      
+      if (insertErr) {
+        logger.error("Failed to post run_card info", { 
+          error: insertErr.message, 
+          details: insertErr.details, 
+          hint: insertErr.hint 
+        });
+      } else {
+        logger.info("Successfully posted run_card to agent_conversations");
+      }
     } catch (err: any) {
-      logger.error("Failed to post run_card info", { error: err.message });
+      logger.error("Exception in run_card posting logic", { error: err.message });
     }
 
     logger.info(`Run successfully finished.`);
@@ -339,7 +348,7 @@ async function failRun(runId: string, errorReason: string, agentId: string, user
       .select('*', { count: 'exact', head: true })
       .eq('agent_id', agentId);
 
-    await supabase.from('agent_conversations').insert({
+    const { error: insertErr } = await supabase.from('agent_conversations').insert({
       agent_id: agentId,
       user_id: userId,
       run_id: runId,
@@ -353,8 +362,18 @@ async function failRun(runId: string, errorReason: string, agentId: string, user
         step_count: 0 
       }
     });
+
+    if (insertErr) {
+      logger.error("Failed to post failure run_card", { 
+        error: insertErr.message, 
+        details: insertErr.details, 
+        hint: insertErr.hint 
+      });
+    } else {
+      logger.info("Successfully posted failure run_card to agent_conversations");
+    }
   } catch (err: any) {
-    logger.error("Failed to post failure run_card", { error: err.message });
+    logger.error("Exception in failure run_card posting logic", { error: err.message });
   }
 }
 
