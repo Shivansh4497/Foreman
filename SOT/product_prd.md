@@ -2,9 +2,9 @@
 
 **Version:** 1.0.0
 **Status:** IN PROGRESS
-**Completion Status:** 55%
+**Completion Status:** 65%
 **Pending Next:** Feature 5 — Agent Memory & Instruction Updates
-**Last Sprint:** Sprint 2 — Agent Run View Output Rendering — 2026-04-13
+**Last Sprint:** Sprint 3 — Agent Profile Panel — 2026-04-13
 
 ---
 
@@ -518,6 +518,8 @@ Users interact with each hired agent through a persistent Slack-style conversati
 ---
 
 ## Feature 11 — Agent Profile Panel
+
+> **Status: COMPLETE — 100%** · Verified in production on foreman-green.vercel.app · Sprint closed: 2026-04-13
 
 Full-screen overlay showing the agent's complete profile. Opened by clicking the agent name or avatar in the conversation header.
 

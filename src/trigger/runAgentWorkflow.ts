@@ -49,6 +49,50 @@ export const runAgentWorkflow = task({
     }
     const apiKey = secretData;
 
+    // Initialize/resume Notepad State
+    const globalState = run.global_state || {};
+    const stepStatuses = globalState.step_statuses || {};
+    let currentStepNumber = globalState.current_step || 1;
+
+    // --- Step 2: Checkpoint Feedback Capture ---
+    const processedFeedback = globalState.processed_feedback || [];
+    let feedbackModified = false;
+
+    for (const key of Object.keys(globalState)) {
+      if (key.match(/^step_\d+_human_feedback$/) && !processedFeedback.includes(key)) {
+        const feedbackText = globalState[key];
+        const stepNum = key.split('_')[1];
+        
+        try {
+          const signal = await callLLM({
+            provider: llmConfig.provider,
+            model: llmConfig.model,
+            apiKey: apiKey,
+            systemPrompt: "Extract the key preference or instruction from this user feedback in one sentence. Focus on tone, style, or content preferences. No preamble.",
+            userTurn: `Feedback: ${feedbackText}`,
+          });
+
+          const date = new Date().toISOString().split('T')[0];
+          await updateAgentMemory(run.agent_id, `[${date}] User feedback at step ${stepNum}: ${signal}`, supabase);
+          
+          processedFeedback.push(key);
+          feedbackModified = true;
+        } catch (err) {
+          logger.error(`Failed to process feedback for ${key}`, { err });
+          // Skip silently as per requirements
+        }
+      }
+    }
+
+    if (feedbackModified) {
+      globalState.processed_feedback = processedFeedback;
+      await supabase
+        .from('agent_runs')
+        .update({ global_state: globalState })
+        .eq('id', run.id);
+    }
+    // --- End Step 2 ---
+
     // 2. Load Agent Steps
     const { data: steps, error: stepsErr } = await supabase
       .from('agent_steps')
@@ -61,11 +105,6 @@ export const runAgentWorkflow = task({
       await failRun(payload.run_id, "Agent has no steps defined");
       return;
     }
-
-    // Initialize/resume Notepad State
-    const globalState = run.global_state || {};
-    const stepStatuses = globalState.step_statuses || {};
-    let currentStepNumber = globalState.current_step || 1;
 
     // Fast-forward to current step
     const targetSteps = steps.filter(s => s.step_number >= currentStepNumber);
@@ -149,6 +188,23 @@ Perform the objective now. Output ONLY what is requested in the OUT FORMAT. Do n
       }
     }
 
+    // --- Step 1: Run Completion Summary ---
+    try {
+      const summary = await callLLM({
+        provider: llmConfig.provider,
+        model: llmConfig.model,
+        apiKey: apiKey,
+        systemPrompt: "Summarize what this agent run produced in 2-3 sentences. Focus on: what topics were covered, what the output was, any patterns worth remembering for future runs. Be specific and concise. No preamble.",
+        userTurn: `Full Global State Context: ${JSON.stringify(globalState)}`,
+      });
+
+      const date = new Date().toISOString().split('T')[0];
+      await updateAgentMemory(run.agent_id, `[${date}] Run completed: ${summary}`, supabase);
+    } catch (err) {
+      logger.error("Failed to generate run completion summary", { err });
+    }
+    // --- End Step 1 ---
+
     // 4. Job Complete
     await supabase
       .from('agent_runs')
@@ -183,4 +239,21 @@ async function failRun(runId: string, errorReason: string) {
       global_state: { error: errorReason }
     })
     .eq('id', runId);
+}
+
+async function updateAgentMemory(agentId: string, entry: string, supabase: any) {
+  try {
+    const { data: agent } = await supabase.from('agents').select('agent_memory').eq('id', agentId).single();
+    let currentMemory = agent?.agent_memory || "";
+    
+    let newMemory = `${entry}\n${currentMemory}`;
+    if (newMemory.length > 2000) {
+      newMemory = newMemory.substring(0, 2000);
+    }
+
+    await supabase.from('agents').update({ agent_memory: newMemory }).eq('id', agentId);
+  } catch (err) {
+    logger.error("Failed to update agent memory", { err });
+    // Never crash the worker
+  }
 }

@@ -133,5 +133,21 @@ None detected.
 
 ### Human Verification
 VERIFIED — output rendering confirmed working in production (foreman-green.vercel.app)
+---
+
+## Sprint 3 — Feature 7: Agent Profile Panel Sprint Log
+**Timestamp:** 2026-04-13T11:42:53Z
+**Sprint status:** COMPLETE
+
+### What was built:
+- `GET /api/agents/[id]/profile`
+- `PATCH /api/agents/[id]/config`
+- `ProfilePanel.tsx` with hero, stats bar, 3 tabs
+- `ProfileMemoryTab`, `ProfileWorkflowTab`, `ProfileHistoryTab`
+- Step edit modal working from profile
+- Mounted in dashboard and run view
+
+### Human Verification
+VERIFIED — in production on foreman-green.vercel.app
 
 ---
