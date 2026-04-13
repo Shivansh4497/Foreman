@@ -166,17 +166,18 @@ export const runAgentWorkflow = task({
       logger.log(`Feedback found in global_state: ${feedbackFound ? 'yes' : 'no'}`);
 
       let feedbackInjection = "";
+      let userFeedbackInjection = "";
       if (feedbackFound) {
         logger.log(`Injecting feedback into step ${step.step_number} prompt`);
-        feedbackInjection = `IMPORTANT USER INSTRUCTION:\n${aggregatedFeedback.trim()}\nThis instruction was provided by the user and MUST be followed.\nIt overrides any default behavior for this step.\n\n`;
+        feedbackInjection = `\n\n========== CRITICAL USER FEEDBACK ==========\nThe human user has provided explicit feedback from a previous checkpoint:\n${aggregatedFeedback.trim()}\n============================================\nNOTE: You MUST modify your default behavior, output tone, or format to comply with this human feedback. This overrides any conflicting instructions or quality rules.\n`;
+        
+        userFeedbackInjection = `\n\nCRITICAL OVERRIDE: Do not forget to incorporate the human feedback:\n${aggregatedFeedback.trim()}`;
       }
 
       const systemPrompt = `You are an automated step executor within the Foreman workforce architecture.
 You must perfectly execute the following step based strictly on the provided instructions.
 Enforce the QUALITY RULES. Ensure your output conforms precisely to the OUTPUT FORMAT.
-
-${feedbackInjection}${run.agents.agent_memory ? `Agent memory from previous runs: ${run.agents.agent_memory}` : ""}
-
+${run.agents.agent_memory ? `\nAgent memory from previous runs: ${run.agents.agent_memory}\n` : ""}
 CURRENT NOTEPAD STATE (Outputs from previous steps):
 ${JSON.stringify(globalState, null, 2)}
 
@@ -186,7 +187,7 @@ INPUTS: ${step.inputs}
 OUTPUT FORMAT: ${step.output_format}
 QUALITY RULES: ${step.quality_rules}
 
-Perform the objective now. Output ONLY what is requested in the OUT FORMAT. Do not include conversational filler or markdown wrappers unless explicitly requested.`;
+Perform the objective now. Output ONLY what is requested in the OUT FORMAT. Do not include conversational filler or markdown wrappers unless explicitly requested.${feedbackInjection}`;
 
       try {
         const output = await callLLM({
@@ -194,7 +195,7 @@ Perform the objective now. Output ONLY what is requested in the OUT FORMAT. Do n
           model: llmConfig.model,
           apiKey: apiKey,
           systemPrompt: systemPrompt,
-          userTurn: `EXECUTE STEP ${step.step_number}: ${step.objective}`,
+          userTurn: `EXECUTE STEP ${step.step_number}: ${step.objective}${userFeedbackInjection}`,
         });
 
         // Write output locally into global_state notepad
