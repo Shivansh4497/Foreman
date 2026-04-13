@@ -219,11 +219,15 @@ Perform the objective now. Output ONLY what is requested in the OUT FORMAT. Do n
     try {
       logger.info("About to write memory summary");
       
-      // Prune state to avoid context explosion/payload limits
+      // Prune and truncate state to avoid context explosion/Rate Limit payload limits (6000 TPM on Groq free)
       const summaryContext = Object.keys(globalState)
         .filter(k => k.endsWith('_output') || k.includes('_feedback'))
         .reduce((obj, key) => {
-          obj[key] = globalState[key];
+          const val = globalState[key];
+          // Truncate individual strings to 300 chars to keep total payload strictly under TPM limits
+          obj[key] = (typeof val === 'string' && val.length > 300) 
+            ? val.substring(0, 300) + "... [truncated]" 
+            : val;
           return obj;
         }, {} as Record<string, any>);
 
