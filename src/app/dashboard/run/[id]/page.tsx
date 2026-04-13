@@ -2,6 +2,7 @@
 import { useRouter, useParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
+import ProfilePanel from '@/components/profile/ProfilePanel';
 
 export default function RunExecutionPage() {
   const router = useRouter();
@@ -14,6 +15,7 @@ export default function RunExecutionPage() {
   const [submitting, setSubmitting] = useState(false);
   const [humanInput, setHumanInput] = useState('');
   const [expandedSteps, setExpandedSteps] = useState<Record<string, boolean>>({});
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
 
   const toggleStep = (stepNumber: string) => {
     setExpandedSteps(prev => ({
@@ -252,7 +254,13 @@ export default function RunExecutionPage() {
   const stepStatuses = state.step_statuses || {};
   
   return (
-    <div style={{ padding: '24px 28px', maxWidth: '800px', margin: '0 auto' }}>
+    <div style={{ padding: '24px 28px', maxWidth: '800px', margin: '0 auto', position: 'relative', minHeight: '100%' }}>
+      {isProfileOpen && agentRuns?.agent_id && (
+        <ProfilePanel 
+          agentId={agentRuns.agent_id} 
+          onClose={() => setIsProfileOpen(false)} 
+        />
+      )}
       <style>{`
         @keyframes spin { to { transform: rotate(360deg); } }
       `}</style>
@@ -260,7 +268,17 @@ export default function RunExecutionPage() {
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '32px' }}>
         <div>
-          <h1 style={{ fontFamily: "'DM Serif Display', serif", fontSize: '22px', letterSpacing: '-0.4px', color: 'var(--text-primary)', marginBottom: '4px' }}>
+          <h1 
+            onClick={() => setIsProfileOpen(true)}
+            style={{ 
+              fontFamily: "'DM Serif Display', serif", 
+              fontSize: '22px', 
+              letterSpacing: '-0.4px', 
+              color: 'var(--text-primary)', 
+              marginBottom: '4px',
+              cursor: 'pointer'
+            }}
+          >
             {agentRuns.agents?.name || 'Unnamed Agent'} Run
           </h1>
           <div style={{ fontSize: '12px', color: 'var(--text-tertiary)' }}>

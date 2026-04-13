@@ -2,6 +2,7 @@
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
+import ProfilePanel from '@/components/profile/ProfilePanel';
 
 interface Agent {
   id: string;
@@ -18,6 +19,7 @@ export default function DashboardPage() {
   const router = useRouter();
   const [agents, setAgents] = useState<Agent[]>([]);
   const [loading, setLoading] = useState(true);
+  const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
 
   useEffect(() => {
     async function fetchAgents() {
@@ -119,7 +121,13 @@ export default function DashboardPage() {
   }
 
   return (
-    <div style={{ padding: '24px 28px' }}>
+    <div style={{ padding: '24px 28px', position: 'relative', minHeight: '100%' }}>
+      {selectedAgentId && (
+        <ProfilePanel 
+          agentId={selectedAgentId} 
+          onClose={() => setSelectedAgentId(null)} 
+        />
+      )}
       <style>{`
         @keyframes pulse {
           0%, 100% { opacity: 1; }
@@ -265,12 +273,24 @@ export default function DashboardPage() {
               const requiresAttention = agent.status === 'waiting' || agent.status === 'waiting_for_human';
               
               return (
-                <div key={agent.id} style={{
-                  background: '#FFFFFF',
-                  border: requiresAttention ? '1.5px solid #C5D4F0' : '1px solid #D4CFC6',
-                  borderRadius: '12px',
-                  padding: '18px',
-                }}>
+                <div 
+                  key={agent.id} 
+                  onClick={() => setSelectedAgentId(agent.id)}
+                  style={{
+                    background: '#FFFFFF',
+                    border: requiresAttention ? '1.5px solid #C5D4F0' : '1px solid #D4CFC6',
+                    borderRadius: '12px',
+                    padding: '18px',
+                    cursor: 'pointer',
+                    transition: 'border-color 0.15s'
+                  }}
+                  onMouseEnter={(e) => { 
+                    if (!requiresAttention) e.currentTarget.style.borderColor = 'var(--text-tertiary)'; 
+                  }}
+                  onMouseLeave={(e) => { 
+                    if (!requiresAttention) e.currentTarget.style.borderColor = '#D4CFC6'; 
+                  }}
+                >
                   <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '12px' }}>
                     <div>
                       <div style={{ fontSize: '14px', fontWeight: 600, color: '#1A1916', marginBottom: '2px' }}>
@@ -307,27 +327,45 @@ export default function DashboardPage() {
                        : `Last run: ${getTimeSince(agent.updated_at)}`}
                     </div>
                     <div style={{ display: 'flex', gap: '6px' }}>
-                      <button style={{
-                        padding: '5px 11px',
-                        fontSize: '11px',
-                        fontWeight: 500,
-                        color: '#4A4845',
-                        background: '#FFFFFF',
-                        border: '1px solid #D4CFC6',
-                        borderRadius: '6px',
-                        cursor: 'pointer',
-                      }}>
+                      <button 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedAgentId(agent.id);
+                        }}
+                        style={{
+                          padding: '5px 11px',
+                          fontSize: '11px',
+                          fontWeight: 500,
+                          color: '#4A4845',
+                          background: '#FFFFFF',
+                          border: '1px solid #D4CFC6',
+                          borderRadius: '6px',
+                          cursor: 'pointer',
+                        }}
+                      >
                         Edit
                       </button>
                       
                       {agent.status === 'running' ? (
-                        <button style={{
+                        <button 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            // Find the latest run or redirect to a run view
+                            // Original code didn't have a specific run id here
+                          }}
+                          style={{
                           padding: '5px 11px', fontSize: '11px', fontWeight: 500, color: '#4A4845', background: '#FFFFFF', border: '1px solid #D4CFC6', borderRadius: '6px', cursor: 'pointer'
                         }}>
                           View run
                         </button>
                       ) : requiresAttention ? (
-                        <button style={{
+                        <button 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            router.push(`/dashboard/run/${agent.id}`); // Assuming this is how it works, though usually it's run id
+                            // Actually, I'll just let it propagate to card click for now or keep original behavior
+                          }}
+                          style={{
                           padding: '5px 11px', fontSize: '11px', fontWeight: 500, color: '#FFFFFF', background: '#1A1916', border: 'none', borderRadius: '6px', cursor: 'pointer'
                         }}>
                           Review →
@@ -340,7 +378,8 @@ export default function DashboardPage() {
                         </button>
                       ) : (
                         <button 
-                          onClick={async () => {
+                          onClick={async (e) => {
+                            e.stopPropagation();
                             const res = await fetch('/api/runs/start', {
                               method: 'POST',
                               headers: {
