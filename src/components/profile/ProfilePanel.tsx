@@ -25,9 +25,10 @@ interface ProfilePanelProps {
   agentId: string;
   onClose?: () => void;
   inline?: boolean;
+  onRunNow?: () => void;
 }
 
-export default function ProfilePanel({ agentId, onClose, inline }: ProfilePanelProps) {
+export default function ProfilePanel({ agentId, onClose, inline, onRunNow }: ProfilePanelProps) {
   const [activeTab, setActiveTab] = useState<'memory' | 'workflow' | 'history'>('memory');
   const [data, setData] = useState<ProfileData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -240,16 +241,19 @@ export default function ProfilePanel({ agentId, onClose, inline }: ProfilePanelP
             </div>
           </div>
           <div style={{ display: 'flex', gap: '8px' }}>
-            <button style={{
-              padding: '8px 16px',
-              fontSize: '13px',
-              fontWeight: 500,
-              color: 'white',
-              background: 'var(--text-primary)',
-              border: 'none',
-              borderRadius: '8px',
-              cursor: 'pointer'
-            }}>
+            <button 
+              onClick={onRunNow}
+              style={{
+                padding: '8px 16px',
+                fontSize: '13px',
+                fontWeight: 500,
+                color: 'white',
+                background: 'var(--text-primary)',
+                border: 'none',
+                borderRadius: '8px',
+                cursor: 'pointer'
+              }}
+            >
               Run now
             </button>
             <button style={{

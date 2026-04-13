@@ -294,6 +294,8 @@ const LiveRunWidget = ({ runId, agentId, onComplete }: { runId: string, agentId:
 
   useEffect(() => {
     async function poll() {
+      if (runId === 'starting') return;
+      
       const { data: runData } = await supabase.from('agent_runs').select('*').eq('id', runId).single();
       if (runData) {
         setRun(runData);
@@ -324,7 +326,38 @@ const LiveRunWidget = ({ runId, agentId, onComplete }: { runId: string, agentId:
     setResumeLoading(false);
   };
 
-  if (!run) return null;
+  if (!run) {
+    return (
+      <div style={{
+        background: '#FFFFFF',
+        border: '1px solid #D4CFC6',
+        borderRadius: '12px',
+        overflow: 'hidden',
+        marginBottom: '12px',
+        maxWidth: '640px',
+        alignSelf: 'flex-start',
+        width: '100%',
+        animation: 'fadeInUp 0.25s ease'
+      }}>
+        <div style={{
+          padding: '12px 16px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          background: '#F7F6F3',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <div className="spinner-mini" />
+            <div style={{ fontSize: '12px', fontWeight: 600, color: '#1A1916' }}>Starting agent...</div>
+          </div>
+          <Badge status="running" pulse />
+        </div>
+        <div style={{ padding: '24px 16px', textAlign: 'center', fontSize: '13px', color: '#7A7770' }}>
+          Preparing workflow and initializing steps...
+        </div>
+      </div>
+    );
+  }
 
   const stepStatuses = run.global_state?.step_statuses || {};
 
@@ -614,7 +647,11 @@ function ConversationInner() {
   };
 
   const handleRunNow = async () => {
-    if (agent?.status === 'running' || activeRunId) return;
+    if (activeRunId) return;
+    
+    // Optimistic UI start
+    setActiveRunId('starting');
+    
     try {
       const { data: { session } } = await supabase.auth.getSession();
       const res = await fetch('/api/runs/start', {
@@ -625,8 +662,13 @@ function ConversationInner() {
       if (res.ok) {
         const { run_id } = await res.json();
         setActiveRunId(run_id);
+      } else {
+        setActiveRunId(null);
       }
-    } catch (e) { console.error(e); }
+    } catch (e) { 
+      console.error(e); 
+      setActiveRunId(null);
+    }
   };
 
   const handlePause = async () => {
@@ -708,7 +750,7 @@ function ConversationInner() {
 
       {/* Profile Panel Overlay */}
       {selectedAgentId && (
-        <ProfilePanel agentId={selectedAgentId} onClose={() => setSelectedAgentId(null)} />
+        <ProfilePanel agentId={selectedAgentId} onClose={() => setSelectedAgentId(null)} onRunNow={handleRunNow} />
       )}
 
       {/* Chat Column */}
@@ -788,7 +830,7 @@ function ConversationInner() {
 
       {/* Profile Column */}
       <div style={{ height: '100vh', overflow: 'hidden' }}>
-        <ProfilePanel agentId={agentId as string} inline />
+        <ProfilePanel agentId={agentId as string} inline onRunNow={handleRunNow} />
       </div>
     </div>
   );

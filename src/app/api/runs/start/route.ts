@@ -42,6 +42,27 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Agent not found or access denied' }, { status: 404 });
     }
 
+    // NEW: Concurrency Check - Don't start if already running
+    if (agent.status === 'running') {
+      // Small check to see if there's actually a recent run that just started
+      const { data: existingRun } = await serviceClient
+        .from('agent_runs')
+        .select('id, created_at')
+        .eq('agent_id', agent_id)
+        .in('status', ['running', 'waiting_for_human'])
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (existingRun) {
+        return NextResponse.json({ 
+          success: true, 
+          message: 'Agent is already running', 
+          run_id: existingRun.id 
+        });
+      }
+    }
+
     // Create run record
     const { data: newRun, error: runErr } = await serviceClient
       .from('agent_runs')
@@ -59,16 +80,25 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: `Failed to initialize agent run: ${runErr?.message}` }, { status: 500 });
     }
 
-    // Update agent status to running
-    await serviceClient
-      .from('agents')
-      .update({ status: 'running' })
-      .eq('id', agent_id);
-
     // Trigger background executed via Trigger.dev
-    await tasks.trigger<typeof runAgentWorkflow>('run-agent-workflow', {
-      run_id: newRun.id,
-    });
+    try {
+      await tasks.trigger<typeof runAgentWorkflow>('run-agent-workflow', {
+        run_id: newRun.id,
+      });
+
+      // Update agent status to running ONLY after trigger success
+      await serviceClient
+        .from('agents')
+        .update({ status: 'running' })
+        .eq('id', agent_id);
+    } catch (triggerErr: any) {
+      console.error(`[runs/start] Trigger.dev failure: ${triggerErr.message}`);
+      // Revert run record since it didn't actually start
+      await serviceClient.from('agent_runs').delete().eq('id', newRun.id);
+      return NextResponse.json({ 
+        error: `Background worker failed to start. Details: ${triggerErr.message}` 
+      }, { status: 503 });
+    }
 
     // Fetch run number for response
     const { count } = await serviceClient
