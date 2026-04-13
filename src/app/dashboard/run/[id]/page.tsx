@@ -25,12 +25,19 @@ export default function RunExecutionPage() {
   };
 
   const cleanOutput = (raw: string): string => {
-    // Strip markdown code fences: ```json ... ``` or ``` ... ```
+    if (!raw) return '';
     let cleaned = raw.trim();
+    
+    // Attempt to extract content within code fences first
+    const fenceMatch = cleaned.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+    if (fenceMatch) {
+      return fenceMatch[1].trim();
+    }
+
+    // Fallback for single line or no fences
     cleaned = cleaned.replace(/^```json\s*/i, '');
     cleaned = cleaned.replace(/^```\s*/i, '');
     cleaned = cleaned.replace(/\s*```$/i, '');
-    // Also strip leading/trailing backtick-json if single line
     cleaned = cleaned.replace(/^`json\s*/i, '');
     cleaned = cleaned.replace(/`\s*$/i, '');
     return cleaned.trim();

@@ -71,6 +71,7 @@ export const runAgentWorkflow = task({
             systemPrompt: "Extract the key preference or instruction from this user feedback in one sentence. Focus on tone, style, or content preferences. No preamble.",
             userTurn: `Feedback: ${feedbackText}`,
           });
+          console.log(`Memory LLM call result: success`);
 
           const date = new Date().toISOString().split('T')[0];
           await updateAgentMemory(run.agent_id, `[${date}] User feedback at step ${stepNum}: ${signal}`, supabase);
@@ -78,6 +79,7 @@ export const runAgentWorkflow = task({
           processedFeedback.push(key);
           feedbackModified = true;
         } catch (err) {
+          console.log(`Memory LLM call result: error`);
           logger.error(`Failed to process feedback for ${key}`, { err });
           // Skip silently as per requirements
         }
@@ -148,8 +150,7 @@ export const runAgentWorkflow = task({
 You must perfectly execute the following step based strictly on the provided instructions.
 Enforce the QUALITY RULES. Ensure your output conforms precisely to the OUTPUT FORMAT.
 
-AGENT MEMORY:
-${run.agents.agent_memory || "No specific memory learned yet."}
+${run.agents.agent_memory ? `Agent memory from previous runs: ${run.agents.agent_memory}` : ""}
 
 CURRENT NOTEPAD STATE (Outputs from previous steps):
 ${JSON.stringify(globalState, null, 2)}
@@ -197,10 +198,12 @@ Perform the objective now. Output ONLY what is requested in the OUT FORMAT. Do n
         systemPrompt: "Summarize what this agent run produced in 2-3 sentences. Focus on: what topics were covered, what the output was, any patterns worth remembering for future runs. Be specific and concise. No preamble.",
         userTurn: `Full Global State Context: ${JSON.stringify(globalState)}`,
       });
+      console.log(`Memory LLM call result: success`);
 
       const date = new Date().toISOString().split('T')[0];
       await updateAgentMemory(run.agent_id, `[${date}] Run completed: ${summary}`, supabase);
     } catch (err) {
+      console.log(`Memory LLM call result: error`);
       logger.error("Failed to generate run completion summary", { err });
     }
     // --- End Step 1 ---
@@ -242,6 +245,7 @@ async function failRun(runId: string, errorReason: string) {
 }
 
 async function updateAgentMemory(agentId: string, entry: string, supabase: any) {
+  console.log(`Memory write starting for agent ${agentId}`);
   try {
     const { data: agent } = await supabase.from('agents').select('agent_memory').eq('id', agentId).single();
     let currentMemory = agent?.agent_memory || "";
@@ -251,8 +255,15 @@ async function updateAgentMemory(agentId: string, entry: string, supabase: any) 
       newMemory = newMemory.substring(0, 2000);
     }
 
-    await supabase.from('agents').update({ agent_memory: newMemory }).eq('id', agentId);
+    const { error: updateErr } = await supabase.from('agents').update({ agent_memory: newMemory }).eq('id', agentId);
+    
+    if (updateErr) {
+      console.log(`Supabase memory update result: error`);
+    } else {
+      console.log(`Supabase memory update result: success`);
+    }
   } catch (err) {
+    console.log(`Supabase memory update result: error`);
     logger.error("Failed to update agent memory", { err });
     // Never crash the worker
   }
