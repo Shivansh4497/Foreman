@@ -22,21 +22,35 @@ export default function RunExecutionPage() {
     }));
   };
 
+  const cleanOutput = (raw: string): string => {
+    // Strip markdown code fences: ```json ... ``` or ``` ... ```
+    let cleaned = raw.trim();
+    cleaned = cleaned.replace(/^```json\s*/i, '');
+    cleaned = cleaned.replace(/^```\s*/i, '');
+    cleaned = cleaned.replace(/\s*```$/i, '');
+    // Also strip leading/trailing backtick-json if single line
+    cleaned = cleaned.replace(/^`json\s*/i, '');
+    cleaned = cleaned.replace(/`\s*$/i, '');
+    return cleaned.trim();
+  };
+
   const renderOutput = (output: any) => {
     if (!output) return null;
     
     let parsed: any;
     try {
-      parsed = typeof output === 'string' ? JSON.parse(output) : output;
+      const cleaned = typeof output === 'string' ? cleanOutput(output) : output;
+      parsed = typeof cleaned === 'string' ? JSON.parse(cleaned) : cleaned;
     } catch (e) {
       return <p style={{ margin: 0 }}>{String(output)}</p>;
     }
 
-    // 1. If result has "post_draft" key -> return just the post_draft value as a <p> tag
-    if (parsed && typeof parsed === 'object' && parsed.post_draft) {
+    // 1. If result has "chat_bubble_format" or "post_draft" -> return the value as a <p> tag
+    if (parsed && typeof parsed === 'object' && (parsed.chat_bubble_format || parsed.post_draft)) {
+      const displayValue = parsed.chat_bubble_format || parsed.post_draft;
       return (
         <p style={{ margin: 0, lineHeight: '1.6' }}>
-          {parsed.post_draft}
+          {displayValue}
         </p>
       );
     }
