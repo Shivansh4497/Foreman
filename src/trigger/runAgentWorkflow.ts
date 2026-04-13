@@ -38,16 +38,20 @@ export const runAgentWorkflow = task({
       return;
     }
 
-    const { data: secretData, error: secretErr } = await supabase.rpc('get_service_secret', {
-      secret_id: llmConfig.vault_secret_id
-    });
+    const vaultSupabase = createClient(supabaseUrl, supabaseServiceKey, { db: { schema: 'vault' } });
+    
+    const { data: secretData, error: secretErr } = await vaultSupabase
+      .from('decrypted_secrets')
+      .select('decrypted_secret')
+      .eq('id', llmConfig.vault_secret_id)
+      .single();
 
-    if (secretErr || !secretData) {
+    if (secretErr || !secretData || !secretData.decrypted_secret) {
       logger.error("Failed to decrypt API key from Vault", { errorMessage: secretErr?.message });
       await failRun(payload.run_id, "Failed to unlock provider API key via Vault");
       return;
     }
-    const apiKey = secretData;
+    const apiKey = secretData.decrypted_secret;
 
     // Initialize/resume Notepad State
     const globalState = run.global_state || {};
@@ -64,6 +68,7 @@ export const runAgentWorkflow = task({
         const stepNum = key.split('_')[1];
         
         try {
+          console.log("Memory write - agentId:", run.agent_id, "hasApiKey:", !!apiKey);
           const signal = await callLLM({
             provider: llmConfig.provider,
             model: llmConfig.model,
@@ -209,6 +214,7 @@ Perform the objective now. Output ONLY what is requested in the OUT FORMAT. Do n
 
     // --- Step 1: Run Completion Summary ---
     try {
+      console.log("Memory write - agentId:", run.agent_id, "hasApiKey:", !!apiKey);
       const summary = await callLLM({
         provider: llmConfig.provider,
         model: llmConfig.model,
