@@ -456,7 +456,14 @@ const MessageBubble = ({ message, isExpanded, onToggleRun }: { message: Message;
   );
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignSelf: isAgent ? 'flex-start' : 'flex-end', maxWidth: '72%', marginBottom: '12px' }}>
+    <div style={{ 
+      display: 'flex', 
+      flexDirection: 'column', 
+      alignSelf: isAgent ? 'flex-start' : 'flex-end', 
+      alignItems: isAgent ? 'flex-start' : 'flex-end',
+      maxWidth: '72%', 
+      marginBottom: '12px' 
+    }}>
       <div style={{
         fontSize: '10px', fontWeight: 600, letterSpacing: '0.5px', textTransform: 'uppercase',
         color: '#7A7770', marginBottom: '4px', textAlign: isAgent ? 'left' : 'right'
@@ -468,13 +475,13 @@ const MessageBubble = ({ message, isExpanded, onToggleRun }: { message: Message;
         border: isAgent ? '1px solid #C5D4F0' : '1px solid #D4CFC6',
         color: '#1A1916', padding: '11px 14px', borderRadius: '10px',
         fontSize: '13px', lineHeight: '1.55', whiteSpace: 'pre-line',
-        display: isAgent ? 'block' : 'inline-block'
+        display: isAgent ? 'block' : 'inline-block',
+        textAlign: 'left'
       }}>
         {message.content}
       </div>
       <div style={{ 
         fontSize: '11px', color: '#7A7770', 
-        alignSelf: isAgent ? 'flex-start' : 'flex-end', 
         marginTop: '3px'
       }}>
         {formatTime(message.created_at)}
@@ -678,7 +685,7 @@ function ConversationInner() {
   }, [messages, activeRunId, agentId, expandedRuns]);
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '200px 1fr 300px', height: '100vh', overflow: 'hidden', background: '#FFFFFF', fontFamily: "'DM Sans', sans-serif" }}>
+    <div style={{ display: 'grid', gridTemplateColumns: '1fr 300px', height: '100vh', overflow: 'hidden', background: '#FFFFFF', fontFamily: "'DM Sans', sans-serif" }}>
       <style>{`
         @keyframes pulse {
           0%, 100% { opacity: 1; transform: scale(1); }

@@ -275,9 +275,10 @@ export default function ProfilePanel({ agentId, onClose, inline }: ProfilePanelP
       <div style={{
         display: 'grid',
         gridTemplateColumns: inline ? 'repeat(2, 1fr)' : 'repeat(4, 1fr)',
-        gap: '8px',
-        padding: '12px 20px',
-        borderBottom: '1px solid var(--border)'
+        gap: '10px',
+        padding: '16px 20px',
+        borderBottom: '1px solid var(--border)',
+        background: '#FFFFFF'
       }}>
         {[
           { label: 'Total runs', value: stats.total_runs },
@@ -286,15 +287,20 @@ export default function ProfilePanel({ agentId, onClose, inline }: ProfilePanelP
           { label: 'Avg run time', value: stats.avg_run_time }
         ].map((stat, i) => (
           <div key={i} style={{
-            background: 'var(--bg)',
-            borderRadius: '8px',
-            padding: '8px 10px'
+            background: '#F7F6F3',
+            border: '1px solid #D4CFC6',
+            borderRadius: '10px',
+            padding: '12px',
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'center'
           }}>
             <div style={{
-              fontSize: '16px',
-              fontWeight: 600,
-              color: 'var(--text-primary)',
-              letterSpacing: '-0.2px'
+              fontSize: '18px',
+              fontWeight: 700,
+              color: '#1A1916',
+              letterSpacing: '-0.3px',
+              lineHeight: 1.2
             }}>
               {stat.value}
             </div>
@@ -302,9 +308,9 @@ export default function ProfilePanel({ agentId, onClose, inline }: ProfilePanelP
               fontSize: '10px',
               fontWeight: 600,
               textTransform: 'uppercase',
-              letterSpacing: '0.5px',
-              color: 'var(--text-tertiary)',
-              marginTop: '2px'
+              letterSpacing: '0.6px',
+              color: '#7A7770',
+              marginTop: '4px'
             }}>
               {stat.label}
             </div>
