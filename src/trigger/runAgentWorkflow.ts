@@ -34,7 +34,7 @@ export const runAgentWorkflow = task({
 
     if (configErr || !llmConfig) {
       logger.error("User LLM config not found or failed to fetch", { errorMessage: configErr?.message });
-      await failRun(payload.run_id, "Missing LLM configuration for user");
+      await failRun(payload.run_id, "Missing LLM configuration for user", run.agent_id, run.user_id);
       return;
     }
 
@@ -44,7 +44,7 @@ export const runAgentWorkflow = task({
 
     if (rpcErr || !apiKey) {
       logger.error("Failed to decrypt API key via Vault RPC", { errorMessage: rpcErr?.message });
-      await failRun(payload.run_id, "Failed to unlock provider API key via Vault");
+      await failRun(payload.run_id, "Failed to unlock provider API key via Vault", run.agent_id, run.user_id);
       return;
     }
     logger.info("Secret retrieved successfully via RPC");
@@ -107,7 +107,7 @@ export const runAgentWorkflow = task({
 
     if (stepsErr || !steps || steps.length === 0) {
       logger.error("Steps not found", { errorMessage: stepsErr?.message });
-      await failRun(payload.run_id, "Agent has no steps defined");
+      await failRun(payload.run_id, "Agent has no steps defined", run.agent_id, run.user_id);
       return;
     }
 
@@ -269,32 +269,48 @@ Perform the objective now. Output ONLY what is requested in the OUT FORMAT. Do n
       await supabase.from('agents').update({ total_runs: (currentAgent.total_runs || 0) + 1 }).eq('id', run.agent_id);
     }
 
-    // Post final output to agent_conversations
+    // Insert run_card message into agent_conversations
     try {
-      // Find the last step's output
       const lastStepNumber = steps[steps.length - 1].step_number;
-      const finalOutput = globalState[`step_${lastStepNumber}_output`];
+      const finalOutput = globalState[`step_${lastStepNumber}_output`] || '';
       
-      if (finalOutput) {
-        // Fetch run number for metadata
-        const { count } = await supabase
-          .from('agent_runs')
-          .select('*', { count: 'exact', head: true })
-          .eq('agent_id', run.agent_id);
-        
-        await supabase.from('agent_conversations').insert({
-          agent_id: run.agent_id,
-          user_id: run.user_id,
-          run_id: run.id,
-          role: 'agent',
-          message_type: 'output',
-          content: String(finalOutput),
-          metadata: { run_number: count || 0 }
-        });
-        logger.info("Posted final output to agent_conversations");
-      }
+      const { count } = await supabase
+        .from('agent_runs')
+        .select('*', { count: 'exact', head: true })
+        .eq('agent_id', run.agent_id);
+      
+      const stepsArray = steps.map(s => ({
+        step_number: s.step_number,
+        name: s.name || s.objective.split('.')[0],
+        step_type: s.step_type,
+        status: stepStatuses[s.step_number.toString()] || 'completed',
+        output: globalState[`step_${s.step_number}_output`] || null
+      }));
+
+      const durationSeconds = Math.floor(
+        (Date.now() - new Date(run.created_at).getTime()) / 1000
+      );
+
+      await supabase.from('agent_conversations').insert({
+        agent_id: run.agent_id,
+        user_id: run.user_id,
+        run_id: run.id,
+        role: 'agent',
+        message_type: 'run_card',
+        content: String(finalOutput).substring(0, 120) + (String(finalOutput).length > 120 ? '...' : ''),
+        metadata: {
+          run_number: count || 0,
+          status: 'completed',
+          step_count: steps.length,
+          duration_seconds: durationSeconds,
+          output_preview: String(finalOutput).substring(0, 120),
+          full_output: finalOutput,
+          steps: stepsArray
+        }
+      });
+      logger.info("Posted run_card to agent_conversations");
     } catch (err: any) {
-      logger.error("Failed to post output to agent_conversations", { error: err.message });
+      logger.error("Failed to post run_card info", { error: err.message });
     }
 
     logger.info(`Run successfully finished.`);
@@ -303,7 +319,7 @@ Perform the objective now. Output ONLY what is requested in the OUT FORMAT. Do n
 });
 
 // Helper Function
-async function failRun(runId: string, errorReason: string) {
+async function failRun(runId: string, errorReason: string, agentId: string, userId: string) {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
   const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
@@ -315,6 +331,31 @@ async function failRun(runId: string, errorReason: string) {
       global_state: { error: errorReason }
     })
     .eq('id', runId);
+
+  // Insert failed run_card
+  try {
+    const { count } = await supabase
+      .from('agent_runs')
+      .select('*', { count: 'exact', head: true })
+      .eq('agent_id', agentId);
+
+    await supabase.from('agent_conversations').insert({
+      agent_id: agentId,
+      user_id: userId,
+      run_id: runId,
+      role: 'agent',
+      message_type: 'run_card',
+      content: errorReason,
+      metadata: { 
+        status: 'failed', 
+        error: errorReason, 
+        run_number: count || 0,
+        step_count: 0 
+      }
+    });
+  } catch (err: any) {
+    logger.error("Failed to post failure run_card", { error: err.message });
+  }
 }
 
 async function updateAgentMemory(agentId: string, entry: string, supabase: any) {

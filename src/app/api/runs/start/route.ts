@@ -70,7 +70,17 @@ export async function POST(request: Request) {
       run_id: newRun.id,
     });
 
-    return NextResponse.json({ success: true, run_id: newRun.id });
+    // Fetch run number for response
+    const { count } = await serviceClient
+      .from('agent_runs')
+      .select('*', { count: 'exact', head: true })
+      .eq('agent_id', agent_id);
+
+    return NextResponse.json({ 
+      success: true, 
+      run_id: newRun.id,
+      run_number: (count || 0) + 1 
+    });
 
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Unknown error';

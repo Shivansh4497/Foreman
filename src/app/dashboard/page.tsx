@@ -352,17 +352,15 @@ export default function DashboardPage() {
                           Chat
                         </button>
                         
-                        {agent.status === 'running' ? (
                           <button 
                             onClick={(e) => {
                               e.stopPropagation();
-                              // Find latest run logic would go here, usually handled via polling or conversation
                               router.push(`/dashboard/conversation/${agent.id}`);
                             }}
                             style={{
                             padding: '5px 11px', fontSize: '11px', fontWeight: 500, color: '#4A4845', background: '#FFFFFF', border: '1px solid #D4CFC6', borderRadius: '6px', cursor: 'pointer'
                           }}>
-                            View run
+                            Chat
                           </button>
                         ) : requiresAttention ? (
                           <button 
@@ -396,21 +394,7 @@ export default function DashboardPage() {
                           <button 
                             onClick={async (e) => {
                               e.stopPropagation();
-                              const { data: { session } } = await supabase.auth.getSession();
-                              const res = await fetch('/api/runs/start', {
-                                method: 'POST',
-                                headers: {
-                                  'Content-Type': 'application/json',
-                                  'Authorization': `Bearer ${session?.access_token}`
-                                },
-                                body: JSON.stringify({ agent_id: agent.id })
-                              });
-                              if (res.ok) {
-                                router.push(`/dashboard/conversation/${agent.id}`);
-                              } else {
-                                const errData = await res.json();
-                                alert(`Failed to start run: ${errData.error || res.statusText}`);
-                              }
+                              router.push(`/dashboard/conversation/${agent.id}?autorun=true`);
                             }}
                             style={{
                             padding: '5px 11px', fontSize: '11px', fontWeight: 500, color: '#FFFFFF', background: '#1A1916', border: 'none', borderRadius: '6px', cursor: 'pointer'

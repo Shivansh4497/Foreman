@@ -1,8 +1,11 @@
 'use client';
 
-import { useParams, useRouter } from 'next/navigation';
-import { useEffect, useState, useRef } from 'react';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
+import { useEffect, useState, useRef, useMemo } from 'react';
 import { supabase } from '@/lib/supabase';
+import ProfilePanel from '@/components/profile/ProfilePanel';
+
+// --- Types ---
 
 interface Agent {
   id: string;
@@ -16,212 +19,515 @@ interface Agent {
 }
 
 interface Step {
-  id: string;
   step_number: number;
   name: string;
-  objective: string;
-  step_type: 'auto' | 'review';
-  is_checkpoint: boolean;
+  step_type: 'auto' | 'review' | 'manual_review';
+  status: 'pending' | 'running' | 'completed' | 'failed' | 'waiting' | 'waiting_for_human';
+  output: string | null;
 }
 
-interface Run {
-  id: string;
-  status: string;
-  created_at: string;
-  metadata?: any;
+interface RunMetadata {
+  run_number: number;
+  status: 'completed' | 'failed' | 'running' | 'waiting_for_human';
+  step_count: number;
+  duration_seconds: number;
+  output_preview: string;
+  full_output?: string;
+  error?: string;
+  steps: Step[];
 }
 
 interface Message {
   id: string;
+  agent_id: string;
+  user_id: string;
+  run_id?: string;
   role: 'user' | 'agent';
+  message_type: 'text' | 'run_card' | 'memory_update' | 'run_divider';
   content: string;
-  message_type: 'text' | 'run_divider' | 'memory_update' | 'output' | 'checkpoint';
+  metadata?: RunMetadata;
   created_at: string;
-  metadata?: any;
 }
+
+interface AgentRun {
+  id: string;
+  agent_id: string;
+  status: string;
+  global_state: any;
+  created_at: string;
+}
+
+// --- Components ---
+
+const DayDivider = ({ date }: { date: string }) => (
+  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', margin: '16px 0 12px' }}>
+    <div style={{ flex: 1, height: '1px', background: '#D4CFC6' }} />
+    <span style={{ fontSize: '11px', fontWeight: 600, color: '#7A7770' }}>{date}</span>
+    <div style={{ flex: 1, height: '1px', background: '#D4CFC6' }} />
+  </div>
+);
+
+const Badge = ({ status, pulse }: { status: string; pulse?: boolean }) => {
+  let bg = '#F0EEE9';
+  let color = '#7A7770';
+  let label = status;
+  let dotColor = 'currentColor';
+
+  switch (status.toLowerCase()) {
+    case 'completed':
+    case 'done':
+    case '✓ done':
+      bg = '#EAF5EE';
+      color = '#1A7A4A';
+      label = '✓ Done';
+      break;
+    case 'failed':
+    case '✗ failed':
+      bg = '#FEE2E2';
+      color = '#991B1B';
+      label = '✗ Failed';
+      break;
+    case 'running':
+      bg = '#EEF2FB';
+      color = '#2E5BBA';
+      label = 'Running';
+      dotColor = '#2E5BBA';
+      break;
+    case 'waiting_for_human':
+    case 'waiting for you':
+      bg = '#FEF3DC';
+      color = '#8A5C00';
+      label = 'Waiting for you';
+      break;
+  }
+
+  return (
+    <div style={{
+      display: 'inline-flex',
+      alignItems: 'center',
+      gap: '5px',
+      padding: '3px 9px',
+      borderRadius: '100px',
+      fontSize: '11px',
+      fontWeight: 600,
+      background: bg,
+      color: color,
+    }}>
+      {pulse && (
+        <div style={{
+          width: '5px',
+          height: '5px',
+          borderRadius: '50%',
+          background: dotColor,
+          animation: 'pulse 1.2s ease-in-out infinite',
+        }} />
+      )}
+      {label}
+    </div>
+  );
+};
+
+const RunCard = ({ message }: { message: Message }) => {
+  const [isExpanded, setIsExpanded] = useState(false);
+  const metadata = message.metadata;
+  if (!metadata) return null;
+
+  const date = new Date(message.created_at);
+  const dateStr = date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+  const timeStr = date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+
+  const isFailed = metadata.status === 'failed';
+
+  return (
+    <div style={{
+      background: '#FFFFFF',
+      border: `1px solid ${isFailed ? '#FECACA' : '#D4CFC6'}`,
+      borderRadius: '12px',
+      overflow: 'hidden',
+      marginBottom: '12px',
+      maxWidth: '640px',
+      alignSelf: 'flex-start',
+      width: '100%',
+      transition: 'max-height 0.3s ease',
+    }}>
+      {/* Header */}
+      <div style={{
+        padding: '12px 16px',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        borderBottom: '1px solid #D4CFC6',
+        background: isFailed ? '#FEE2E2' : 'transparent',
+      }}>
+        <div style={{ fontSize: '12px', fontWeight: 600, color: '#1A1916' }}>
+          Run #{metadata.run_number} · {dateStr} · {timeStr}
+        </div>
+        <Badge status={metadata.status} />
+      </div>
+
+      {!isExpanded ? (
+        <>
+          <div style={{ padding: '12px 16px', fontSize: '13px', color: '#4A4845', line-height: '1.6' }}>
+            {isFailed ? (
+              <div style={{ fontSize: '12px', color: '#991B1B' }}>
+                Failed at step {metadata.steps?.find(s => s.status === 'failed')?.step_number || 'N'}: {metadata.error}
+              </div>
+            ) : (
+              metadata.output_preview ? (metadata.output_preview + (metadata.full_output?.length > 120 ? '...' : '')) : ''
+            )}
+          </div>
+          <div style={{ display: 'flex', justify-content: 'flex-end', padding: '8px 16px' }}>
+            <button 
+              onClick={() => setIsExpanded(true)}
+              style={{ fontSize: '12px', fontWeight: 500, color: '#2E5BBA', background: 'none', border: 'none', cursor: 'pointer' }}
+            >
+              Know more ↓
+            </button>
+          </div>
+        </>
+      ) : (
+        <div style={{ animation: 'fadeIn 0.3s ease' }}>
+          {/* Step List */}
+          <div style={{ padding: '12px 16px', borderBottom: '1px solid #D4CFC6' }}>
+            {metadata.steps?.map((step, idx) => (
+              <StepRow key={idx} step={step} isLast={idx === metadata.steps.length - 1} />
+            ))}
+          </div>
+          {/* Full Output */}
+          {!isFailed && (
+            <div style={{ padding: '16px', background: '#F7F6F3', borderTop: '1px solid #D4CFC6', fontSize: '13px', color: '#1A1916', line-height: '1.7', white-space: 'pre-line' }}>
+              {metadata.full_output}
+            </div>
+          )}
+          <div style={{ display: 'flex', justify-content: 'flex-end', padding: '8px 16px' }}>
+            <button 
+              onClick={() => setIsExpanded(false)}
+              style={{ fontSize: '12px', fontWeight: 500, color: '#2E5BBA', background: 'none', border: 'none', cursor: 'pointer' }}
+            >
+              Close ↑
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+const StepRow = ({ step, isLast }: { step: Step; isLast: boolean }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  
+  const getIcon = () => {
+    switch (step.status) {
+      case 'completed': return { char: '✓', bg: '#EAF5EE', color: '#1A7A4A' };
+      case 'failed': return { char: '✗', bg: '#FEE2E2', color: '#991B1B' };
+      case 'waiting_for_human':
+      case 'waiting': return { char: '⏸', bg: '#FEF3DC', color: '#8A5C00' };
+      case 'running': return { char: '', bg: '#EEF2FB', color: '#2E5BBA', spinner: true };
+      default: return { char: step.step_number.toString(), bg: '#F0EEE9', color: '#7A7770' };
+    }
+  };
+
+  const icon = getIcon();
+
+  return (
+    <div style={{ borderBottom: isLast ? 'none' : '1px solid #F0EEE9' }}>
+      <div 
+        onClick={() => step.output && setIsOpen(!isOpen)}
+        style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '7px 0', cursor: step.output ? 'pointer' : 'default' }}
+      >
+        <div style={{
+          width: '20px',
+          height: '20px',
+          borderRadius: '50%',
+          background: icon.bg,
+          color: icon.color,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          fontSize: '10px',
+          fontWeight: 600,
+          border: icon.spinner ? '2px solid #2E5BBA' : 'none',
+        }}>
+          {icon.spinner ? <div className="spinner-mini" /> : icon.char}
+        </div>
+        <div style={{ fontSize: '13px', fontWeight: 500, color: '#1A1916', flex: 1 }}>{step.name}</div>
+        <div style={{
+          background: step.step_type === 'auto' ? '#EAF5EE' : '#FEF3DC',
+          color: step.step_type === 'auto' ? '#1A7A4A' : '#8A5C00',
+          fontSize: '10px',
+          fontWeight: 600,
+          padding: '2px 6px',
+          borderRadius: '4px',
+          textTransform: 'capitalize'
+        }}>
+          {step.step_type === 'auto' ? 'Auto' : 'Review'}
+        </div>
+      </div>
+      {isOpen && step.output && (
+        <div style={{
+          background: '#F7F6F3',
+          borderRadius: '6px',
+          padding: '8px 10px',
+          margin: '4px 0 4px 30px',
+          fontSize: '12px',
+          color: '#4A4845',
+          lineHeight: 1.5,
+          maxHeight: '80px',
+          overflow: 'hidden'
+        }}>
+          {step.output}
+        </div>
+      )}
+    </div>
+  );
+};
+
+const LiveRunWidget = ({ runId, agentId, onComplete }: { runId: string, agentId: string, onComplete: () => void }) => {
+  const [run, setRun] = useState<AgentRun | null>(null);
+  const [steps, setSteps] = useState<any[]>([]);
+  const [resumeLoading, setResumeLoading] = useState(false);
+
+  useEffect(() => {
+    async function poll() {
+      const { data: runData } = await supabase.from('agent_runs').select('*').eq('id', runId).single();
+      if (runData) {
+        setRun(runData);
+        if (runData.status === 'completed' || runData.status === 'failed') {
+          onComplete();
+        }
+      }
+
+      const { data: stepsData } = await supabase.from('agent_steps')
+        .select('*')
+        .eq('agent_id', agentId)
+        .order('step_number', { ascending: true });
+      if (stepsData) setSteps(stepsData);
+    }
+
+    poll();
+    const interval = setInterval(poll, 3000);
+    return () => clearInterval(interval);
+  }, [runId, agentId, onComplete]);
+
+  const handleResume = async (feedback?: string) => {
+    setResumeLoading(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      await fetch('/api/runs/resume', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token}` },
+        body: JSON.stringify({ run_id: runId, human_feedback: feedback })
+      });
+    } catch (e) { console.error(e); }
+    setResumeLoading(false);
+  };
+
+  if (!run) return null;
+
+  const stepStatuses = run.global_state?.step_statuses || {};
+
+  return (
+    <div style={{
+      background: '#FFFFFF',
+      border: '1px solid #D4CFC6',
+      borderRadius: '12px',
+      overflow: 'hidden',
+      marginBottom: '12px',
+      maxWidth: '640px',
+      alignSelf: 'flex-start',
+      width: '100%',
+      animation: 'fadeInUp 0.25s ease'
+    }}>
+      <div style={{
+        padding: '12px 16px',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        borderBottom: '1px solid #D4CFC6',
+      }}>
+        <div style={{ fontSize: '12px', fontWeight: 600, color: '#1A1916' }}>Starting run...</div>
+        <Badge status="running" pulse />
+      </div>
+
+      <div style={{ padding: '12px 16px' }}>
+        {steps.map((s, idx) => {
+          const status = stepStatuses[s.step_number.toString()] || 'pending';
+          const isCurrent = status === 'waiting_for_human';
+          
+          return (
+            <div key={idx}>
+              <StepRow step={{
+                step_number: s.step_number,
+                name: s.name || s.objective.split('.')[0],
+                step_type: s.step_type,
+                status: status,
+                output: run.global_state?.[`step_${s.step_number}_output`] || null
+              }} isLast={idx === steps.length - 1} />
+              
+              {isCurrent && (
+                <div style={{
+                  background: '#FFFFFF',
+                  border: '1px solid #C5D4F0',
+                  borderRadius: '8px',
+                  padding: '12px',
+                  margin: '8px 0 8px 30px',
+                  animation: 'fadeIn 0.2s ease'
+                }}>
+                  <div style={{ fontSize: '12px', fontWeight: 600, color: '#2E5BBA', marginBottom: '10px' }}>Your input is needed</div>
+                  <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
+                    {['Looks good, proceed', 'Revise the tone'].map(pill => (
+                      <button 
+                        key={pill}
+                        disabled={resumeLoading}
+                        onClick={() => handleResume(pill === 'Looks good, proceed' ? undefined : pill)}
+                        style={{
+                          padding: '6px 14px', borderRadius: '100px', fontSize: '12px',
+                          background: '#F7F6F3', border: '1px solid #D4CFC6', color: '#4A4845',
+                          cursor: 'pointer', transition: 'all 0.15s'
+                        }}
+                        onMouseEnter={e => { e.currentTarget.style.borderColor = '#2E5BBA'; e.currentTarget.style.color = '#2E5BBA'; }}
+                        onMouseLeave={e => { e.currentTarget.style.borderColor = '#D4CFC6'; e.currentTarget.style.color = '#4A4845'; }}
+                      >
+                        {pill}
+                      </button>
+                    ))}
+                  </div>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <textarea 
+                      id="checkpoint-input"
+                      placeholder="Type instructions..."
+                      style={{
+                        flex: 1, height: '36px', padding: '8px 12px', border: '1px solid #D4CFC6', borderRadius: '8px',
+                        fontSize: '12px', fontFamily: 'inherit', resize: 'none'
+                      }}
+                    />
+                    <button 
+                      onClick={() => {
+                        const val = (document.getElementById('checkpoint-input') as HTMLTextAreaElement).value;
+                        handleResume(val);
+                      }}
+                      style={{ background: '#1A1916', color: 'white', border: 'none', borderRadius: '8px', padding: '0 16px', fontSize: '12px', cursor: 'pointer' }}
+                    >
+                      Send
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
+const MessageBubble = ({ message }: { message: Message }) => {
+  const isAgent = message.role === 'agent';
+  
+  if (message.message_type === 'run_card') return <RunCard message={message} />;
+  if (message.message_type === 'memory_update') return (
+    <div style={{
+      display: 'inline-flex', alignItems: 'center', gap: '8px',
+      padding: '6px 12px', background: '#EAF5EE', border: '1px solid #B8DFC8',
+      borderRadius: '8px', fontSize: '12px', color: '#1A7A4A', fontWeight: 500,
+      alignSelf: 'flex-start', marginBottom: '12px'
+    }}>
+      🧠 {message.content}
+    </div>
+  );
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', alignSelf: isAgent ? 'flex-start' : 'flex-end', maxWidth: '72%', marginBottom: '12px' }}>
+      <div style={{
+        fontSize: '10px', fontWeight: 600, letterSpacing: '0.5px', textTransform: 'uppercase',
+        color: isAgent ? '#2E5BBA' : '#7A7770', marginBottom: '4px', textAlign: isAgent ? 'left' : 'right'
+      }}>
+        {isAgent ? 'AGENT' : 'YOU'}
+      </div>
+      <div style={{
+        background: isAgent ? '#EEF2FB' : '#F0EEE9',
+        border: isAgent ? '1px solid #C5D4F0' : '1px solid #D4CFC6',
+        color: '#1A1916', padding: '11px 14px', borderRadius: '10px',
+        fontSize: '13px', lineHeight: '1.55', whiteSpace: 'pre-line'
+      }}>
+        {message.content}
+      </div>
+    </div>
+  );
+};
+
+// --- Main Page ---
 
 export default function AgentConversationPage() {
   const { agentId } = useParams();
   const router = useRouter();
-  
-  // Chat State
+  const searchParams = useSearchParams();
+  const autorun = searchParams.get('autorun') === 'true';
+
   const [agent, setAgent] = useState<Agent | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
+  const [activeRunId, setActiveRunId] = useState<string | null>(null);
   const [inputValue, setInputValue] = useState('');
   const [isSending, setIsSending] = useState(false);
-  const [isRefreshing, setIsRefreshing] = useState(true);
-  const [waitingRunId, setWaitingRunId] = useState<string | null>(null);
-  
-  // Profile Panel State
-  const [profileAgent, setProfileAgent] = useState<Agent | null>(null);
-  const [steps, setSteps] = useState<Step[]>([]);
-  const [runs, setRuns] = useState<Run[]>([]);
-  const [activeProfileTab, setActiveProfileTab] = useState<'memory' | 'workflow' | 'history'>('memory');
-  const [windowWidth, setWindowWidth] = useState(typeof window !== 'undefined' ? window.innerWidth : 1201);
-  
-  const scrollRef = useRef<HTMLDivElement>(null);
+  const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
 
-  // Responsive Guard
+  const threadRef = useRef<HTMLDivElement>(null);
+
+  // Initial Fetch & Polling
   useEffect(() => {
-    const handleResize = () => setWindowWidth(window.innerWidth);
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
+    async function fetchData() {
+      const { data: agentData } = await supabase.from('agents').select('*').eq('id', agentId).single();
+      if (agentData) setAgent(agentData);
 
-  // Auto-scroll to bottom
-  useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-    }
-  }, [messages]);
-
-  // Initial Fetch & Chat Polling
-  useEffect(() => {
-    async function fetchInitialData() {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-
-      // Fetch agent
-      const { data: agentData } = await supabase
-        .from('agents')
-        .select('id, name, status, total_runs')
-        .eq('id', agentId as string)
-        .single();
-
-      if (agentData) {
-        setAgent(agentData as Agent);
-      }
-
-      // Fetch message history
-      const { data: msgData } = await supabase
-        .from('agent_conversations')
+      const { data: msgData } = await supabase.from('agent_conversations')
         .select('*')
-        .eq('agent_id', agentId as string)
+        .eq('agent_id', agentId)
         .order('created_at', { ascending: true });
-
       if (msgData) {
         setMessages(msgData as Message[]);
       }
-      setIsRefreshing(false);
     }
 
-    fetchInitialData();
-
-    const interval = setInterval(async () => {
-      // Fetch new messages
-      const { data: newMsgs } = await supabase
-        .from('agent_conversations')
-        .select('*')
-        .eq('agent_id', agentId as string)
-        .order('created_at', { ascending: true });
-
-      if (newMsgs) {
-        setMessages(prev => {
-          if (newMsgs.length !== prev.filter(m => m.message_type !== 'checkpoint').length) {
-            const checkpoint = prev.find(m => m.message_type === 'checkpoint');
-            return checkpoint ? [...newMsgs, checkpoint] : newMsgs;
-          }
-          return prev;
-        });
-      }
-
-      // Fetch agent status
-      const { data: agentData } = await supabase
-        .from('agents')
-        .select('id, name, status, total_runs')
-        .eq('id', agentId as string)
-        .single();
-
-      if (agentData) {
-        setAgent(agentData as Agent);
-        if (agentData.status === 'waiting_for_human' || agentData.status === 'waiting') {
-          const { data: runData } = await supabase
-            .from('agent_runs')
-            .select('id, status, global_state')
-            .eq('agent_id', agentId as string)
-            .eq('status', 'waiting_for_human')
-            .order('created_at', { ascending: false })
-            .limit(1)
-            .single();
-
-          if (runData && runData.id !== waitingRunId) {
-            setWaitingRunId(runData.id);
-            setMessages(prev => {
-              if (!prev.find(m => m.message_type === 'checkpoint' && m.metadata?.run_id === runData.id)) {
-                const currentStep = runData.global_state?.current_step;
-                const checkpointContent = runData.global_state?.[`step_${currentStep}_output`] || "Awaiting your review...";
-                return [...prev, {
-                  id: `checkpoint-${runData.id}`,
-                  role: 'agent',
-                  content: checkpointContent,
-                  message_type: 'checkpoint',
-                  created_at: new Date().toISOString(),
-                  metadata: { run_id: runData.id, step: currentStep }
-                } as Message];
-              }
-              return prev;
-            });
-          }
-        } else {
-          setWaitingRunId(null);
-          setMessages(prev => prev.filter(m => m.message_type !== 'checkpoint' || m.metadata?.approved));
-        }
-      }
-    }, 3000);
-
-    return () => clearInterval(interval);
-  }, [agentId, waitingRunId]);
-
-  // Profile Data Fetching (Independent - 10s interval)
-  useEffect(() => {
-    async function fetchProfileData() {
-      // 1. Fetch Agent (for memory and stats)
-      const { data: agentData } = await supabase
-        .from('agents')
-        .select('id, name, status, schedule, total_runs, agent_memory, created_at, human_hours_per_run')
-        .eq('id', agentId as string)
-        .single();
-      
-      if (agentData) setProfileAgent(agentData as Agent);
-
-      // 2. Fetch Steps
-      const { data: stepsData } = await supabase
-        .from('agent_steps')
-        .select('*')
-        .eq('agent_id', agentId as string)
-        .order('step_number', { ascending: true });
-      
-      if (stepsData) setSteps(stepsData as Step[]);
-
-      // 3. Fetch Runs (last 20)
-      const { data: runsData } = await supabase
-        .from('agent_runs')
-        .select('id, status, created_at, metadata')
-        .eq('agent_id', agentId as string)
-        .order('created_at', { ascending: false })
-        .limit(20);
-      
-      if (runsData) setRuns(runsData as Run[]);
-    }
-
-    fetchProfileData();
-    const interval = setInterval(fetchProfileData, 10000);
+    fetchData();
+    const interval = setInterval(fetchData, 3000);
     return () => clearInterval(interval);
   }, [agentId]);
 
+  // Handle Autorun
+  useEffect(() => {
+    if (autorun && agent && !activeRunId) {
+      handleRunNow();
+    }
+  }, [autorun, agent]);
+
+  // Auto-scroll
+  useEffect(() => {
+    if (threadRef.current) {
+      threadRef.current.scrollTop = threadRef.current.scrollHeight;
+    }
+  }, [messages, activeRunId]);
+
   const handleSendMessage = async () => {
     if (!inputValue.trim() || isSending) return;
+    const content = inputValue.trim().toLowerCase();
+    
+    if (content === 'run now') {
+      handleRunNow();
+      setInputValue('');
+      return;
+    }
+
     setIsSending(true);
-
-    const content = inputValue.trim();
     setInputValue('');
-
-    // Pre-inject message for responsiveness
+    
+    // Optimistic UI
     const tempMsg: Message = {
       id: Math.random().toString(),
+      agent_id: agentId as string,
+      user_id: '',
       role: 'user',
-      content,
       message_type: 'text',
+      content: inputValue.trim(),
       created_at: new Date().toISOString()
     };
     setMessages(prev => [...prev, tempMsg]);
@@ -230,669 +536,173 @@ export default function AgentConversationPage() {
       const { data: { session } } = await supabase.auth.getSession();
       const res = await fetch('/api/conversation/message', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session?.access_token}`
-        },
-        body: JSON.stringify({ agent_id: agentId, content })
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token}` },
+        body: JSON.stringify({ agent_id: agentId, content: inputValue.trim() })
       });
-
-      if (!res.ok) throw new Error('Failed to send message');
-      
-      const result = await res.json();
-      if (result.intent === 'RUN_TRIGGER' && result.run_id) {
-        // Option handled by server: it will post run_divider and agent notification
+      const data = await res.json();
+      if (data.intent === 'RUN_TRIGGER' && data.run_id) {
+        setActiveRunId(data.run_id);
       }
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setIsSending(false);
-    }
-  };
-
-  const handleResumeRun = async (runId: string, feedback?: string) => {
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const res = await fetch('/api/runs/resume', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session?.access_token}`
-        },
-        body: JSON.stringify({ run_id: runId, human_feedback: feedback })
-      });
-
-      if (res.ok) {
-        // Mark checkpoint as approved
-        setMessages(prev => prev.map(m => 
-          (m.message_type === 'checkpoint' && m.metadata?.run_id === runId) 
-            ? { ...m, content: '✓ Approved — continuing run...', metadata: { ...m.metadata, approved: true } }
-            : m
-        ));
-        setWaitingRunId(null);
-      }
-    } catch (err) {
-      console.error(err);
-    }
-  };
-
-  const handlePause = async () => {
-    if (!agent) return;
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const newStatus = agent.status === 'paused' ? 'active' : 'paused';
-      const res = await fetch(`/api/agents/${agentId}/pause`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session?.access_token}`
-        },
-        body: JSON.stringify({ status: newStatus })
-      });
-      if (res.ok) {
-        setAgent(prev => prev ? { ...prev, status: newStatus as any } : null);
-      }
-    } catch (err) {
-      console.error(err);
-    }
+    } catch (e) { console.error(e); }
+    setIsSending(false);
   };
 
   const handleRunNow = async () => {
+    if (agent?.status === 'running' || activeRunId) return;
     try {
       const { data: { session } } = await supabase.auth.getSession();
       const res = await fetch('/api/runs/start', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session?.access_token}`
-        },
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token}` },
         body: JSON.stringify({ agent_id: agentId })
       });
       if (res.ok) {
         const { run_id } = await res.json();
-        router.push(`/dashboard/run/${run_id}`);
+        setActiveRunId(run_id);
       }
-    } catch (err) {
-      console.error(err);
-    }
+    } catch (e) { console.error(e); }
   };
 
-  function renderStatusBadge(status: string) {
-    let bg = '#F0EEE9';
-    let color = '#7A7770';
-    let label = 'Unknown';
-    let shouldPulse = false;
+  const handlePause = async () => {
+    if (!agent) return;
+    const newStatus = agent.status === 'paused' ? 'active' : 'paused';
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      await fetch(`/api/agents/${agentId}/pause`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token}` },
+        body: JSON.stringify({ status: newStatus })
+      });
+    } catch (e) { console.error(e); }
+  };
 
-    switch (status.toLowerCase()) {
-      case 'running':
-        bg = '#EEF2FB';
-        color = '#2E5BBA';
-        label = 'Running';
-        shouldPulse = true;
-        break;
-      case 'active':
-        bg = '#EAF5EE';
-        color = '#1A7A4A';
-        label = 'Active';
-        break;
-      case 'waiting_for_human':
-      case 'waiting':
-        bg = '#FEF3DC';
-        color = '#8A5C00';
-        label = 'Waiting';
-        break;
-      case 'paused':
-        bg = '#F0EEE9';
-        color = '#7A7770';
-        label = 'Paused';
-        break;
-      case 'failed':
-        bg = '#FEE2E2';
-        color = '#991B1B';
-        label = 'Failed';
-        break;
+  // Group by day logic
+  const threadElements = useMemo(() => {
+    const elements: React.ReactNode[] = [];
+    let lastDate = '';
+
+    messages.forEach((msg) => {
+      const date = new Date(msg.created_at).toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
+      if (date !== lastDate) {
+        elements.push(<DayDivider key={`divider-${msg.id}`} date={date} />);
+        lastDate = date;
+      }
+      elements.push(<MessageBubble key={msg.id} message={msg} />);
+    });
+
+    if (activeRunId) {
+      elements.push(<LiveRunWidget key="live-run" runId={activeRunId} agentId={agentId as string} onComplete={() => setActiveRunId(null)} />);
     }
 
-    return (
-      <div style={{
-        display: 'inline-flex',
-        alignItems: 'center',
-        gap: '5px',
-        padding: '3px 9px',
-        borderRadius: '100px',
-        fontSize: '11px',
-        fontWeight: 600,
-        background: bg,
-        color: color,
-      }}>
-        <div style={{
-          width: '5px',
-          height: '5px',
-          borderRadius: '50%',
-          background: 'currentColor',
-          animation: shouldPulse ? 'pulse 1.2s ease-in-out infinite' : undefined,
-        }}></div>
-        {label}
-      </div>
-    );
-  }
+    return elements;
+  }, [messages, activeRunId, agentId]);
 
   return (
-    <div style={{ 
-      display: 'grid', 
-      gridTemplateColumns: windowWidth < 1200 ? '1fr' : '1fr 300px',
-      gridTemplateRows: '56px 1fr',
-      height: '100vh', 
-      background: '#FFFFFF',
-      overflow: 'hidden'
-    }}>
-      {/* GLOBAL HEADER (Spans both columns) */}
-      <header style={{
-        gridColumn: windowWidth < 1200 ? '1' : '1 / span 2',
-        height: '56px',
-        background: '#FFFFFF',
-        borderBottom: '1px solid #D4CFC6',
-        padding: '0 20px',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        flexShrink: 0,
-        zIndex: 20
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center' }}>
-          <div style={{
-            width: '32px',
-            height: '32px',
-            background: '#1A1916',
-            borderRadius: '8px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            color: '#FFFFFF',
-            fontSize: '14px',
-            fontWeight: 600,
-            marginRight: '10px'
-          }}>
-            {agent?.name?.charAt(0).toUpperCase() || 'A'}
+    <div style={{ display: 'grid', gridTemplateColumns: '1fr 300px', height: '100vh', overflow: 'hidden', background: '#FFFFFF', fontFamily: "'DM Sans', sans-serif" }}>
+      <style>{`
+        @keyframes pulse {
+          0%, 100% { opacity: 1; transform: scale(1); }
+          50% { opacity: 0.4; transform: scale(0.9); }
+        }
+        @keyframes fadeIn {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+        @keyframes fadeInUp {
+          from { opacity: 0; transform: translateY(10px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        .spinner-mini {
+          width: 10px; height: 10px; border: 2px solid rgba(46, 91, 186, 0.2); border-top: 2px solid #2E5BBA;
+          border-radius: 50%; animation: spin 0.8s linear infinite;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+      `}</style>
+
+      {/* Profile Panel Overlay */}
+      {selectedAgentId && (
+        <ProfilePanel agentId={selectedAgentId} onClose={() => setSelectedAgentId(null)} />
+      )}
+
+      {/* Chat Column */}
+      <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', borderRight: '1px solid #D4CFC6' }}>
+        {/* Header */}
+        <header style={{ height: '56px', flexShrink: 0, padding: '0 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid #D4CFC6', background: '#FFFFFF' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <div style={{
+              width: '32px', height: '32px', background: '#1A1916', borderRadius: '8px',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#FFFFFF', fontSize: '14px', fontWeight: 600
+            }}>
+              {agent?.name?.charAt(0).toUpperCase() || 'A'}
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span style={{ fontSize: '14px', fontWeight: 600, color: '#1A1916' }}>{agent?.name}</span>
+              {agent && <Badge status={agent.status} pulse={agent.status === 'running'} />}
+            </div>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center' }}>
-            <span style={{ fontSize: '14px', fontWeight: 600, color: '#1A1916' }}>{agent?.name || 'Loading...'}</span>
-            {agent && <div style={{ marginLeft: '8px' }}>{renderStatusBadge(agent.status)}</div>}
-          </div>
-        </div>
-
-        <div style={{ display: 'flex' }}>
-          <button 
-            onClick={handleRunNow}
-            style={{
-              background: '#1A1916',
-              color: '#FFFFFF',
-              padding: '7px 16px',
-              fontSize: '13px',
-              fontWeight: 500,
-              border: 'none',
-              borderRadius: '8px',
-              cursor: 'pointer'
-            }}
-          >
-            Run now
-          </button>
-          <button 
-            onClick={handlePause}
-            style={{
-              marginLeft: '8px',
-              background: '#FFFFFF',
-              border: '1px solid #D4CFC6',
-              color: '#4A4845',
-              padding: '7px 16px',
-              fontSize: '13px',
-              fontWeight: 500,
-              borderRadius: '8px',
-              cursor: 'pointer'
-            }}
-          >
-            {agent?.status === 'paused' ? 'Resume' : 'Pause'}
-          </button>
-        </div>
-      </header>
-
-      {/* COLUMN 1: CHAT PANEL */}
-      <div style={{ 
-        display: 'flex', 
-        flexDirection: 'column', 
-        height: 'calc(100vh - 56px)', 
-        overflow: 'hidden',
-        borderRight: windowWidth >= 1200 ? '1px solid #D4CFC6' : 'none'
-      }}>
-        {/* CHAT THREAD */}
-        <div 
-          ref={scrollRef}
-          style={{
-            flex: 1,
-            overflowY: 'auto',
-            padding: '20px',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '24px',
-            background: '#F7F6F3'
-          }}
-        >
-          {isRefreshing && messages.length === 0 ? (
-            <div style={{ textAlign: 'center', color: '#7A7770', fontSize: '13px', marginTop: '40px' }}>Loading conversation...</div>
-          ) : messages.length === 0 ? (
-            <div style={{ textAlign: 'center', color: '#7A7770', fontSize: '13px', marginTop: '40px' }}>No history yet. Start by saying hello!</div>
-          ) : (
-            messages.map((msg, idx) => {
-              if (msg.message_type === 'run_divider') {
-                return (
-                  <div key={msg.id} style={{ display: 'flex', alignItems: 'center', gap: '10px', margin: '14px 0' }}>
-                    <div style={{ flex: 1, height: '1px', background: '#D4CFC6' }} />
-                    <span style={{ fontSize: '11px', fontWeight: 600, color: '#7A7770' }}>{msg.content}</span>
-                    <div style={{ flex: 1, height: '1px', background: '#D4CFC6' }} />
-                  </div>
-                );
-              }
-
-              if (msg.message_type === 'memory_update') {
-                return (
-                  <div key={msg.id} style={{ alignSelf: 'flex-start' }}>
-                    <div style={{
-                      background: '#EAF5EE',
-                      border: '1px solid #B8DFC8',
-                      borderRadius: '6px',
-                      padding: '4px 10px',
-                      fontSize: '11px',
-                      color: '#1A7A4A',
-                      fontWeight: 500,
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: '4px'
-                    }}>
-                      {msg.content}
-                    </div>
-                  </div>
-                );
-              }
-
-              if (msg.message_type === 'checkpoint') {
-                if (msg.metadata?.approved) {
-                  return (
-                    <div key={msg.id} style={{ alignSelf: 'flex-start' }}>
-                       <div style={{ fontSize: '13px', color: '#1A7A4A', fontWeight: 500 }}>{msg.content}</div>
-                    </div>
-                  );
-                }
-                return (
-                  <div key={msg.id} style={{ 
-                    alignSelf: 'stretch',
-                    background: '#FFFFFF',
-                    border: '1.5px solid #C5D4F0',
-                    borderRadius: '10px',
-                    overflow: 'hidden',
-                    margin: '10px 0'
-                  }}>
-                    <div style={{ padding: '10px 16px', background: '#EEF2FB', borderBottom: '1px solid #C5D4F0', fontSize: '12px', fontWeight: 600, color: '#2E5BBA' }}>
-                      Awaiting Review
-                    </div>
-                    <div style={{ padding: '16px' }}>
-                      <div style={{ fontSize: '13px', color: '#4A4845', lineHeight: 1.55, marginBottom: '20px', whiteSpace: 'pre-line' }}>
-                        {msg.content}
-                      </div>
-                      
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                        <div style={{ display: 'flex', gap: '8px' }}>
-                           <button 
-                             onClick={() => handleResumeRun(msg.metadata?.run_id)}
-                             style={{ padding: '6px 14px', fontSize: '12px', fontWeight: 500, color: '#4A4845', background: '#F7F6F3', border: '1px solid #D4CFC6', borderRadius: '100px', cursor: 'pointer' }}
-                           >
-                             Approve as-is
-                           </button>
-                           <button 
-                             style={{ padding: '6px 14px', fontSize: '12px', fontWeight: 500, color: '#8A5C00', background: '#FEF3DC', border: '1px solid #F5D98A', borderRadius: '100px', cursor: 'pointer' }}
-                           >
-                             Search again
-                           </button>
-                        </div>
-                        
-                        <div style={{ position: 'relative' }}>
-                          <textarea 
-                            id={`feedback-${msg.id}`}
-                            placeholder="Or give specific instructions to fix this..."
-                            style={{
-                              width: '100%',
-                              padding: '10px 12px',
-                              paddingRight: '40px',
-                              border: '1px solid #D4CFC6',
-                              borderRadius: '8px',
-                              fontSize: '13px',
-                              minHeight: '44px',
-                              resize: 'none'
-                            }}
-                          />
-                          <button 
-                            onClick={() => {
-                              const val = (document.getElementById(`feedback-${msg.id}`) as HTMLTextAreaElement).value;
-                              handleResumeRun(msg.metadata?.run_id, val);
-                            }}
-                            style={{
-                              position: 'absolute',
-                              right: '8px',
-                              bottom: '8px',
-                              width: '28px',
-                              height: '28px',
-                              background: '#1A1916',
-                              borderRadius: '7px',
-                              border: 'none',
-                              color: 'white',
-                              cursor: 'pointer'
-                            }}
-                          >
-                            →
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                );
-              }
-
-              const isAgent = msg.role === 'agent';
-              return (
-                <div key={msg.id} style={{ display: 'flex', flexDirection: 'column', gap: '6px', alignSelf: isAgent ? 'flex-start' : 'flex-end', maxWidth: '88%' }}>
-                  <div style={{ fontSize: '10px', fontWeight: 600, color: isAgent ? '#2E5BBA' : '#7A7770', textTransform: 'uppercase', letterSpacing: '0.4px' }}>
-                    {isAgent ? 'AGENT' : 'YOU'}
-                  </div>
-                  <div style={{
-                    padding: '11px 14px',
-                    borderRadius: '10px',
-                    fontSize: '13px',
-                    lineHeight: 1.55,
-                    background: isAgent ? (msg.message_type === 'output' ? '#F7F6F3' : '#EEF2FB') : '#F0EEE9',
-                    border: isAgent ? (msg.message_type === 'output' ? '1px solid #D4CFC6' : '1px solid #C5D4F0') : '1px solid #D4CFC6',
-                    color: '#1A1916',
-                    whiteSpace: 'pre-line'
-                  }}>
-                    {msg.content}
-                  </div>
-                </div>
-              );
-            })
-          )}
-        </div>
-
-        {/* CHAT INPUT */}
-        <div style={{
-          background: '#FFFFFF',
-          borderTop: '1px solid #D4CFC6',
-          padding: '12px 16px',
-          flexShrink: 0
-        }}>
-          <div style={{
-            display: 'flex',
-            gap: '12px',
-            alignItems: 'flex-end',
-            maxWidth: '100%',
-            position: 'relative'
-          }}>
-            <textarea 
-              value={inputValue}
-              onChange={(e) => setInputValue(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                  e.preventDefault();
-                  handleSendMessage();
-                }
-              }}
-              placeholder="Type a message, give feedback, or say 'run now'"
-              rows={1}
-              style={{
-                flex: 1,
-                padding: '12px 16px',
-                paddingRight: '50px',
-                border: '1.5px solid #D4CFC6',
-                borderRadius: '10px',
-                background: '#FFFFFF',
-                color: '#1A1916',
-                fontSize: '13px',
-                lineHeight: 1.5,
-                resize: 'none',
-                maxHeight: '120px'
-              }}
-            />
+          <div style={{ display: 'flex', gap: '8px' }}>
             <button 
-              onClick={handleSendMessage}
-              disabled={!inputValue.trim() || isSending}
-              style={{
-                position: 'absolute',
-                right: '10px',
-                bottom: '10px',
-                width: '32px',
-                height: '32px',
-                background: '#1A1916',
-                borderRadius: '7px',
-                border: 'none',
-                color: 'white',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                cursor: 'pointer',
-                opacity: inputValue.trim() ? 1 : 0.3
-              }}
+              onClick={handleRunNow}
+              style={{ background: '#1A1916', color: '#FFFFFF', border: 'none', borderRadius: '8px', padding: '7px 16px', fontSize: '13px', fontWeight: 500, cursor: 'pointer' }}
             >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M5 12h14" />
-                <path d="m12 5 7 7-7 7" />
-              </svg>
+              Run now
+            </button>
+            <button 
+              onClick={handlePause}
+              style={{ background: '#FFFFFF', color: '#4A4845', border: '1px solid #D4CFC6', borderRadius: '8px', padding: '7px 16px', fontSize: '13px', fontWeight: 500, cursor: 'pointer' }}
+            >
+              {agent?.status === 'paused' ? 'Resume' : 'Pause'}
             </button>
           </div>
+        </header>
+
+        {/* Thread */}
+        <div ref={threadRef} style={{ flex: 1, overflowY: 'auto', padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 0, background: '#F7F6F3' }}>
+          {threadElements}
+        </div>
+
+        {/* Input area */}
+        <div style={{ flexShrink: 0, padding: '12px 20px', borderTop: '1px solid #D4CFC6', background: '#FFFFFF', display: 'flex', alignItems: 'flex-end', gap: '10px' }}>
+          <textarea 
+            value={inputValue}
+            placeholder="Type a message, give feedback, or say 'run now'"
+            onChange={(e) => {
+              setInputValue(e.target.value);
+              e.target.style.height = 'auto';
+              e.target.style.height = Math.min(e.target.scrollHeight, 120) + 'px';
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                handleSendMessage();
+              }
+            }}
+            style={{
+              flex: 1, minHeight: '40px', maxHeight: '120px', padding: '10px 14px',
+              border: '1.5px solid #D4CFC6', borderRadius: '10px', fontSize: '13px',
+              fontFamily: 'inherit', color: '#1A1916', resize: 'none', lineHeight: 1.5
+            }}
+          />
+          <button 
+            onClick={handleSendMessage}
+            disabled={!inputValue.trim() || isSending}
+            style={{
+              width: '28px', height: '28px', background: '#1A1916', borderRadius: '7px',
+              border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center',
+              cursor: 'pointer', opacity: inputValue.trim() ? 1 : 0.3, transition: 'opacity 0.2s'
+            }}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5">
+              <path d="M5 12h14M12 5l7 7-7 7" />
+            </svg>
+          </button>
         </div>
       </div>
 
-      {/* COLUMN 3: PROFILE PANEL */}
-      {windowWidth >= 1200 && (
-        <div style={{ 
-          width: '300px', 
-          background: '#FFFFFF', 
-          display: 'flex', 
-          flexDirection: 'column',
-          height: 'calc(100vh - 56px)', 
-          overflow: 'hidden'
-        }}>
-          {/* PROFILE HEADER (Muted) */}
-          {profileAgent?.schedule && (
-            <div style={{ padding: '16px', borderBottom: '1px solid #D4CFC6', flexShrink: 0 }}>
-              <div style={{ fontSize: '11px', color: '#7A7770' }}>
-                {profileAgent.schedule}
-              </div>
-            </div>
-          )}
-
-          {/* STATS BAR */}
-          {(() => {
-            const totalRuns = profileAgent?.total_runs || 0;
-            const timeSavedHours = ((profileAgent?.human_hours_per_run || 0) * totalRuns).toFixed(1);
-            
-            return (
-              <div style={{ 
-                display: 'grid', 
-                gridTemplateColumns: '1fr 1fr',
-                gap: '8px', 
-                padding: '12px 16px',
-                borderBottom: '1px solid #D4CFC6',
-                flexShrink: 0
-              }}>
-                {[
-                  { label: 'Total runs', value: totalRuns },
-                  { label: 'Time saved', value: `${timeSavedHours}h` },
-                  { label: 'Total cost', value: '$0.00' },
-                  { label: 'Avg run time', value: '14m' }
-                ].map((stat, i) => (
-                  <div key={i} style={{ background: '#F7F6F3', borderRadius: '8px', padding: '8px 10px' }}>
-                    <div style={{ fontSize: '15px', fontWeight: 600, color: '#1A1916', letterSpacing: '-0.2px' }}>{stat.value}</div>
-                    <div style={{ 
-                      fontSize: '10px', 
-                      fontWeight: 600, 
-                      textTransform: 'uppercase', 
-                      letterSpacing: '0.5px', 
-                      color: '#7A7770', 
-                      marginTop: '2px' 
-                    }}>{stat.label}</div>
-                  </div>
-                ))}
-              </div>
-            );
-          })()}
-
-          {/* TABS */}
-          <div style={{ display: 'flex', borderBottom: '1px solid #D4CFC6', padding: '0 16px', flexShrink: 0 }}>
-            {(['memory', 'workflow', 'history'] as const).map(tab => (
-              <div 
-                key={tab}
-                onClick={() => setActiveProfileTab(tab)}
-                style={{
-                  padding: '9px 12px',
-                  fontSize: '12px',
-                  fontWeight: 500,
-                  color: activeProfileTab === tab ? '#1A1916' : '#7A7770',
-                  borderBottom: `2px solid ${activeProfileTab === tab ? '#1A1916' : 'transparent'}`,
-                  marginBottom: '-1px',
-                  cursor: 'pointer',
-                  textTransform: 'capitalize'
-                }}
-              >
-                {tab === 'history' ? 'Run History' : tab}
-              </div>
-            ))}
-          </div>
-
-          {/* TAB CONTENT */}
-          <div style={{ flex: 1, overflowY: 'auto', padding: '16px' }}>
-            {activeProfileTab === 'memory' && (
-              <div>
-                {!profileAgent?.agent_memory ? (
-                  <div style={{ fontSize: '12px', color: '#7A7770', textAlign: 'center', marginTop: '24px' }}>
-                    No memory yet. Run the agent and give feedback to start building memory.
-                  </div>
-                ) : (
-                  profileAgent.agent_memory.split('\n').filter(line => line.trim()).slice(0, 20).map((line, i) => (
-                    <div key={i} style={{ 
-                      background: '#F7F6F3', 
-                      border: '1px solid #D4CFC6', 
-                      borderRadius: '8px',
-                      padding: '8px 10px',
-                      marginBottom: '6px',
-                      fontSize: '12px',
-                      color: '#1A1916',
-                      lineHeight: 1.5
-                    }}>
-                      {line.replace(/^\[\d{4}-\d{2}-\d{2}\]\s*/, '')}
-                    </div>
-                  ))
-                )}
-              </div>
-            )}
-
-            {activeProfileTab === 'workflow' && (
-              <div>
-                {steps.map((step, i) => (
-                  <div key={step.id} style={{ 
-                    display: 'flex', 
-                    alignItems: 'center', 
-                    gap: '8px',
-                    padding: '9px 0',
-                    borderBottom: i === steps.length - 1 ? 'none' : '1px solid #D4CFC6'
-                  }}>
-                    <div style={{
-                      width: '20px',
-                      height: '20px',
-                      borderRadius: '50%',
-                      background: step.step_type === 'review' ? '#EEF2FB' : '#F0EEE9',
-                      color: step.step_type === 'review' ? '#2E5BBA' : '#7A7770',
-                      fontSize: '10px',
-                      fontWeight: 600,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      flexShrink: 0
-                    }}>
-                      {step.step_number}
-                    </div>
-                    <div style={{ fontSize: '12px', fontWeight: 500, color: '#1A1916', flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                      {step.name || step.objective?.substring(0, 40)}
-                    </div>
-                    <div style={{
-                      fontSize: '10px',
-                      fontWeight: 600,
-                      padding: '2px 6px',
-                      borderRadius: '4px',
-                      background: step.step_type === 'review' ? '#FEF3DC' : '#EAF5EE',
-                      color: step.step_type === 'review' ? '#8A5C00' : '#1A7A4A',
-                      textTransform: 'uppercase'
-                    }}>
-                      {step.step_type}
-                    </div>
-                  </div>
-                ))}
-                <div style={{ marginTop: '16px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                    <span style={{ fontSize: '11px', color: '#7A7770' }}>Schedule</span>
-                    <span style={{ fontSize: '11px', fontWeight: 500, color: '#1A1916' }}>{profileAgent?.schedule || 'Manual'}</span>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span style={{ fontSize: '11px', color: '#7A7770' }}>Provider</span>
-                    <span style={{ fontSize: '11px', fontWeight: 500, color: '#1A1916' }}>OpenAI (gpt-4o)</span>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {activeProfileTab === 'history' && (
-              <div>
-                {runs.length === 0 ? (
-                  <div style={{ fontSize: '12px', color: '#7A7770', textAlign: 'center', marginTop: '24px' }}>No runs yet.</div>
-                ) : (
-                  runs.map((run, i) => (
-                    <div 
-                      key={run.id} 
-                      onClick={() => router.push(`/dashboard/run/${run.id}`)}
-                      style={{ 
-                        display: 'flex', 
-                        alignItems: 'center', 
-                        gap: '8px',
-                        padding: '8px 0',
-                        borderBottom: i === runs.length - 1 ? 'none' : '1px solid #D4CFC6',
-                        cursor: 'pointer'
-                      }}
-                    >
-                      <div style={{
-                        width: '7px',
-                        height: '7px',
-                        borderRadius: '50%',
-                        background: run.status === 'completed' ? '#1A7A4A' : (run.status === 'failed' ? '#991B1B' : '#8A5C00'),
-                        flexShrink: 0
-                      }} />
-                      <div style={{ fontSize: '12px', fontWeight: 500, color: '#1A1916' }}>Run #{runs.length - i}</div>
-                      <div style={{ fontSize: '11px', color: '#7A7770' }}>
-                        {new Date(run.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                      </div>
-                      <div style={{ fontSize: '11px', color: '#7A7770', marginLeft: 'auto' }}>
-                        $0.02
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      <style jsx global>{`
-        @keyframes pulse {
-          0%, 100% { opacity: 1; }
-          50% { opacity: 0.3; }
-        }
-      `}</style>
+      {/* Profile Column */}
+      <div style={{ height: '100vh', overflow: 'hidden' }}>
+        <ProfilePanel agentId={agentId as string} inline />
+      </div>
     </div>
   );
 }

@@ -23,10 +23,11 @@ interface ProfileData {
 
 interface ProfilePanelProps {
   agentId: string;
-  onClose: () => void;
+  onClose?: () => void;
+  inline?: boolean;
 }
 
-export default function ProfilePanel({ agentId, onClose }: ProfilePanelProps) {
+export default function ProfilePanel({ agentId, onClose, inline }: ProfilePanelProps) {
   const [activeTab, setActiveTab] = useState<'memory' | 'workflow' | 'history'>('memory');
   const [data, setData] = useState<ProfileData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -144,14 +145,16 @@ export default function ProfilePanel({ agentId, onClose }: ProfilePanelProps) {
 
   return (
     <div style={{
-      position: 'absolute',
+      position: inline ? 'relative' : 'absolute',
       inset: 0,
       background: 'var(--surface)',
-      zIndex: 50,
+      zIndex: inline ? 1 : 50,
       display: 'flex',
       flexDirection: 'column',
+      height: '100%',
       overflowX: 'hidden',
-      overflowY: 'auto'
+      overflowY: 'auto',
+      borderLeft: inline ? '1px solid var(--border)' : 'none'
     }}>
       <style>{`
         @keyframes pulse {
@@ -160,115 +163,120 @@ export default function ProfilePanel({ agentId, onClose }: ProfilePanelProps) {
         }
       `}</style>
 
-      {/* Top Bar */}
-      <div style={{
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        padding: '12px 20px',
-        borderBottom: '1px solid var(--border)',
-        flexShrink: 0
-      }}>
-        <button 
-          onClick={onClose}
-          style={{
-            background: 'none',
-            border: 'none',
-            fontSize: '14px',
-            fontWeight: 500,
-            color: 'var(--text-secondary)',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '4px'
-          }}
-        >
-          ← Back
-        </button>
+      {!inline && (
         <div style={{
-          fontSize: '13px',
-          fontWeight: 600,
-          color: 'var(--text-primary)'
-        }}>
-          {agent.name}
-        </div>
-        <div style={{ width: '48px' }} /> {/* Spacer to center title if needed, or just for layout balance */}
-      </div>
-
-      {/* Hero Section */}
-      <div style={{
-        padding: '24px 20px',
-        borderBottom: '1px solid var(--border)',
-        display: 'flex',
-        alignItems: 'center',
-        gap: '20px'
-      }}>
-        <div style={{
-          width: '56px',
-          height: '56px',
-          background: 'var(--text-primary)',
-          borderRadius: '14px',
           display: 'flex',
           alignItems: 'center',
-          justifyContent: 'center',
-          fontSize: '24px',
-          color: 'white'
+          justifyContent: 'space-between',
+          padding: '12px 20px',
+          borderBottom: '1px solid var(--border)',
+          flexShrink: 0
         }}>
-          {agent.name.charAt(0).toUpperCase()}
-        </div>
-        <div style={{ flex: 1 }}>
-          <h1 style={{
-            fontFamily: "'DM Serif Display', serif",
-            fontSize: '20px',
-            color: 'var(--text-primary)',
-            marginBottom: '4px'
+          <button 
+            onClick={onClose}
+            style={{
+              background: 'none',
+              border: 'none',
+              fontSize: '14px',
+              fontWeight: 500,
+              color: 'var(--text-secondary)',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px'
+            }}
+          >
+            ← Back
+          </button>
+          <div style={{
+            fontSize: '13px',
+            fontWeight: 600,
+            color: 'var(--text-primary)'
           }}>
             {agent.name}
-          </h1>
+          </div>
+          <div style={{ width: '48px' }} />
+        </div>
+      )}
+
+      {!inline ? (
+        <div style={{
+          padding: '24px 20px',
+          borderBottom: '1px solid var(--border)',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '20px'
+        }}>
           <div style={{
-            fontSize: '12px',
-            color: 'var(--text-tertiary)',
+            width: '56px',
+            height: '56px',
+            background: 'var(--text-primary)',
+            borderRadius: '14px',
             display: 'flex',
-            alignItems: 'center'
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: '24px',
+            color: 'white'
           }}>
-            {renderStatusDot(agent.status)}
-            {agent.schedule || 'Manual trigger'}
+            {agent.name.charAt(0).toUpperCase()}
+          </div>
+          <div style={{ flex: 1 }}>
+            <h1 style={{
+              fontFamily: "'DM Serif Display', serif",
+              fontSize: '20px',
+              color: 'var(--text-primary)',
+              marginBottom: '4px'
+            }}>
+              {agent.name}
+            </h1>
+            <div style={{
+              fontSize: '12px',
+              color: 'var(--text-tertiary)',
+              display: 'flex',
+              alignItems: 'center'
+            }}>
+              {renderStatusDot(agent.status)}
+              {agent.schedule || 'Manual trigger'}
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <button style={{
+              padding: '8px 16px',
+              fontSize: '13px',
+              fontWeight: 500,
+              color: 'white',
+              background: 'var(--text-primary)',
+              border: 'none',
+              borderRadius: '8px',
+              cursor: 'pointer'
+            }}>
+              Run now
+            </button>
+            <button style={{
+              padding: '8px 16px',
+              fontSize: '13px',
+              fontWeight: 500,
+              color: 'var(--text-secondary)',
+              background: 'var(--surface)',
+              border: '1px solid var(--border)',
+              borderRadius: '8px',
+              cursor: 'pointer'
+            }}>
+              {agent.status === 'paused' ? 'Resume' : 'Pause'}
+            </button>
           </div>
         </div>
-        <div style={{ display: 'flex', gap: '8px' }}>
-          <button style={{
-            padding: '8px 16px',
-            fontSize: '13px',
-            fontWeight: 500,
-            color: 'white',
-            background: 'var(--text-primary)',
-            border: 'none',
-            borderRadius: '8px',
-            cursor: 'pointer'
-          }}>
-            Run now
-          </button>
-          <button style={{
-            padding: '8px 16px',
-            fontSize: '13px',
-            fontWeight: 500,
-            color: 'var(--text-secondary)',
-            background: 'var(--surface)',
-            border: '1px solid var(--border)',
-            borderRadius: '8px',
-            cursor: 'pointer'
-          }}>
-            {agent.status === 'paused' ? 'Resume' : 'Pause'}
-          </button>
+      ) : (
+        <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)' }}>
+          <div style={{ fontSize: '11px', color: 'var(--text-tertiary)' }}>{agent.schedule || 'Manual trigger'}</div>
         </div>
-      </div>
+      )}
 
-      {/* Stats Bar */}
       <div style={{
         display: 'grid',
-        gridTemplateColumns: 'repeat(4, 1fr)',
-        gap: '12px',
-        padding: '16px 20px',
+        gridTemplateColumns: inline ? 'repeat(2, 1fr)' : 'repeat(4, 1fr)',
+        gap: '8px',
+        padding: '12px 20px',
         borderBottom: '1px solid var(--border)'
       }}>
         {[
@@ -279,26 +287,26 @@ export default function ProfilePanel({ agentId, onClose }: ProfilePanelProps) {
         ].map((stat, i) => (
           <div key={i} style={{
             background: 'var(--bg)',
-            border: '1px solid var(--border)',
-            borderRadius: '9px',
-            padding: '12px'
+            borderRadius: '8px',
+            padding: '8px 10px'
           }}>
+            <div style={{
+              fontSize: '16px',
+              fontWeight: 600,
+              color: 'var(--text-primary)',
+              letterSpacing: '-0.2px'
+            }}>
+              {stat.value}
+            </div>
             <div style={{
               fontSize: '10px',
               fontWeight: 600,
               textTransform: 'uppercase',
               letterSpacing: '0.5px',
               color: 'var(--text-tertiary)',
-              marginBottom: '4px'
+              marginTop: '2px'
             }}>
               {stat.label}
-            </div>
-            <div style={{
-              fontSize: '18px',
-              fontWeight: 600,
-              color: 'var(--text-primary)'
-            }}>
-              {stat.value}
             </div>
           </div>
         ))}

@@ -110,22 +110,15 @@ export async function POST(request: Request) {
       const newMemory = `${memoryEntry}\n${agent.agent_memory || ''}`.substring(0, 2000);
       await supabase.from('agents').update({ agent_memory: newMemory }).eq('id', agent_id);
 
+      const memoryContent = `Got it — I've noted that ${distilled.toLowerCase().replace(/\.$/, '')}. I'll apply this from your next run.`;
+      
       // Insert memory update message
       await supabase.from('agent_conversations').insert({
         agent_id,
         user_id: user.id,
         role: 'agent',
         message_type: 'memory_update',
-        content: `🧠 Memory updated — ${distilled}`
-      });
-
-      // Insert agent text reply
-      await supabase.from('agent_conversations').insert({
-        agent_id,
-        user_id: user.id,
-        role: 'agent',
-        message_type: 'text',
-        content: "Got it — I've saved that to memory. It will apply from your next run."
+        content: memoryContent
       });
 
       return NextResponse.json({ success: true, intent: classifiedIntent });
@@ -173,30 +166,12 @@ export async function POST(request: Request) {
       // Fire Trigger.dev
       await tasks.trigger('run-agent-workflow', { run_id: newRun.id });
 
-      // Insert run divider
-      const now = new Date();
-      const dateStr = now.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
-      const timeStr = now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
-      
-      await supabase.from('agent_conversations').insert({
-        agent_id,
-        user_id: user.id,
-        role: 'agent',
-        message_type: 'run_divider',
-        content: `Run #${runNumber} · ${dateStr} · ${timeStr}`,
-        metadata: { run_id: newRun.id, run_number: runNumber }
+      return NextResponse.json({ 
+        success: true, 
+        intent: 'RUN_TRIGGER', 
+        run_id: newRun.id,
+        run_number: (count || 0) + 1 
       });
-
-      // Insert agent text
-      await supabase.from('agent_conversations').insert({
-        agent_id,
-        user_id: user.id,
-        role: 'agent',
-        message_type: 'text',
-        content: "Starting your run now. I'll post the output here when it's done."
-      });
-
-      return NextResponse.json({ success: true, intent: 'RUN_TRIGGER', run_id: newRun.id });
 
     } else if (classifiedIntent === 'QUESTION') {
       const questionPrompt = `You are ${agent.name}, an AI agent. Answer this question conversationally based on your memory and past runs. Keep it brief (2-3 sentences). Agent memory: ${agent.agent_memory || 'No memory yet.'}`;
