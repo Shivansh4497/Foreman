@@ -38,20 +38,16 @@ export const runAgentWorkflow = task({
       return;
     }
 
-    const vaultSupabase = createClient(supabaseUrl, supabaseServiceKey, { db: { schema: 'vault' } });
-    
-    const { data: secretData, error: secretErr } = await vaultSupabase
-      .from('decrypted_secrets')
-      .select('decrypted_secret')
-      .eq('id', llmConfig.vault_secret_id)
-      .single();
+    // 2. Unlock API Key via Vault RPC (Safe for Service Role)
+    const { data: apiKey, error: rpcErr } = await supabase
+      .rpc('get_service_secret', { secret_id: llmConfig.vault_secret_id });
 
-    if (secretErr || !secretData || !secretData.decrypted_secret) {
-      logger.error("Failed to decrypt API key from Vault", { errorMessage: secretErr?.message });
+    if (rpcErr || !apiKey) {
+      logger.error("Failed to decrypt API key via Vault RPC", { errorMessage: rpcErr?.message });
       await failRun(payload.run_id, "Failed to unlock provider API key via Vault");
       return;
     }
-    const apiKey = secretData.decrypted_secret;
+    logger.info("Secret retrieved successfully via RPC");
 
     // Initialize/resume Notepad State
     const globalState = run.global_state || {};

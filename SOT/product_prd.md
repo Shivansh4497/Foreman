@@ -372,6 +372,8 @@ User triggers a manual run or scheduled run fires. User sees live step-by-step p
 
 ### Feature 5 — Agent Memory & Instruction Updates
 
+> **Status: COMPLETE — 100%** · Built, debugged, and optimized for rate limits · Sprint closed: 2026-04-13
+
 Agents get smarter with every run via permanent memory updates.
 
 **How it works:**
