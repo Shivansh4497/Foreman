@@ -5,38 +5,40 @@ interface ProfileMemoryTabProps {
 }
 
 export default function ProfileMemoryTab({ memory }: ProfileMemoryTabProps) {
-  if (!memory || memory.trim() === '') {
+  const lines = (memory || '')
+    .split('\n')
+    .map((l: string) => l.replace(/^\[\d{4}-\d{2}-\d{2}\]\s*/, '').trim())
+    .filter((l: string) => l.length > 0);
+
+  if (lines.length === 0) {
     return (
       <div style={{
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        minHeight: '200px',
+        fontSize: '12px',
+        color: '#7A7770',
         textAlign: 'center',
-        padding: '0 40px'
+        marginTop: '24px'
       }}>
-        <div style={{
-          fontSize: '13px',
-          color: 'var(--text-tertiary)',
-          lineHeight: 1.6,
-          maxWidth: '300px'
-        }}>
-          This agent hasn't learned anything yet.
-          Memory builds after each run.
-        </div>
+        No memory yet. Run the agent and give feedback to start building memory.
       </div>
     );
   }
 
   return (
-    <div style={{
-      fontSize: '13px',
-      lineHeight: 1.7,
-      color: 'var(--text-secondary)',
-      whiteSpace: 'pre-wrap'
-    }}>
-      {memory}
+    <div style={{ display: 'flex', flexDirection: 'column' }}>
+      {lines.map((line, idx) => (
+        <div key={idx} style={{
+          background: '#F7F6F3',
+          border: '1px solid #D4CFC6',
+          borderRadius: '8px',
+          padding: '9px 12px',
+          marginBottom: '6px',
+          fontSize: '12px',
+          color: '#1A1916',
+          lineHeight: 1.5
+        }}>
+          {line}
+        </div>
+      ))}
     </div>
   );
 }

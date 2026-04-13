@@ -71,18 +71,15 @@ const Badge = ({ status, pulse }: { status: string; pulse?: boolean }) => {
   let bg = '#F0EEE9';
   let color = '#7A7770';
   let label = status;
-  let dotColor = 'currentColor';
 
   switch (status.toLowerCase()) {
     case 'completed':
     case 'done':
-    case '✓ done':
       bg = '#EAF5EE';
       color = '#1A7A4A';
       label = '✓ Done';
       break;
     case 'failed':
-    case '✗ failed':
       bg = '#FEE2E2';
       color = '#991B1B';
       label = '✗ Failed';
@@ -91,13 +88,12 @@ const Badge = ({ status, pulse }: { status: string; pulse?: boolean }) => {
       bg = '#EEF2FB';
       color = '#2E5BBA';
       label = 'Running';
-      dotColor = '#2E5BBA';
       break;
     case 'waiting_for_human':
-    case 'waiting for you':
+    case 'waiting':
       bg = '#FEF3DC';
       color = '#8A5C00';
-      label = 'Waiting for you';
+      label = 'Waiting';
       break;
   }
 
@@ -118,7 +114,7 @@ const Badge = ({ status, pulse }: { status: string; pulse?: boolean }) => {
           width: '5px',
           height: '5px',
           borderRadius: '50%',
-          background: dotColor,
+          background: color,
           animation: 'pulse 1.2s ease-in-out infinite',
         }} />
       )}
@@ -127,59 +123,64 @@ const Badge = ({ status, pulse }: { status: string; pulse?: boolean }) => {
   );
 };
 
-const RunCard = ({ message }: { message: Message }) => {
-  const [isExpanded, setIsExpanded] = useState(false);
+const getStepBadge = (stepType: string) => {
+  const t = stepType?.toLowerCase() || '';
+  if (t === 'manual_review' || t === 'review') {
+    return { label: 'REVIEW', bg: '#FEF3DC', color: '#8A5C00' };
+  }
+  return { label: 'AUTO', bg: '#EAF5EE', color: '#1A7A4A' };
+};
+
+const formatTime = (iso: string) => {
+  const d = new Date(iso);
+  return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+};
+
+const RunCard = ({ message, isExpanded, onToggle }: { message: Message; isExpanded: boolean; onToggle: () => void }) => {
   const metadata = message.metadata;
   if (!metadata) return null;
 
   const date = new Date(message.created_at);
-  const dateStr = date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+  const formattedDate = date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
   const timeStr = date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
-
-  const isFailed = metadata.status === 'failed';
+  const headerStr = `Run #${metadata.run_number} · ${formattedDate} · ${timeStr}`;
 
   return (
     <div style={{
       background: '#FFFFFF',
-      border: `1px solid ${isFailed ? '#FECACA' : '#D4CFC6'}`,
+      border: '1px solid #D4CFC6',
       borderRadius: '12px',
       overflow: 'hidden',
-      marginBottom: '12px',
-      maxWidth: '640px',
+      marginBottom: '16px',
+      maxWidth: '600px',
       alignSelf: 'flex-start',
       width: '100%',
-      transition: 'max-height 0.3s ease',
     }}>
       {/* Header */}
       <div style={{
-        padding: '12px 16px',
+        padding: '11px 16px',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
         borderBottom: '1px solid #D4CFC6',
-        background: isFailed ? '#FEE2E2' : 'transparent',
       }}>
         <div style={{ fontSize: '12px', fontWeight: 600, color: '#1A1916' }}>
-          Run #{metadata.run_number} · {dateStr} · {timeStr}
+          {headerStr}
         </div>
         <Badge status={metadata.status} />
       </div>
 
       {!isExpanded ? (
         <>
-          <div style={{ padding: '12px 16px', fontSize: '13px', color: '#4A4845', lineHeight: '1.6' }}>
-            {isFailed ? (
-              <div style={{ fontSize: '12px', color: '#991B1B' }}>
-                Failed at step {metadata.steps?.find(s => s.status === 'failed')?.step_number || 'N'}: {metadata.error}
-              </div>
-            ) : (
-              metadata.output_preview ? (metadata.output_preview + ((metadata.full_output?.length ?? 0) > 120 ? '...' : '')) : ''
-            )}
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '8px 16px' }}>
+          {metadata.output_preview && (
+            <div style={{ padding: '10px 16px', fontSize: '13px', color: '#4A4845', lineHeight: '1.6' }}>
+              {metadata.output_preview.substring(0, 120)}{metadata.output_preview.length > 120 ? '...' : ''}
+            </div>
+          )}
+          <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '6px 16px 10px' }}>
             <button 
-              onClick={() => setIsExpanded(true)}
-              style={{ fontSize: '12px', fontWeight: 500, color: '#2E5BBA', background: 'none', border: 'none', cursor: 'pointer' }}
+              onClick={onToggle}
+              style={{ fontSize: '12px', fontWeight: 500, color: '#2E5BBA', background: 'none', border: 'none', cursor: 'pointer', fontFamily: "'DM Sans', sans-serif" }}
             >
               Know more ↓
             </button>
@@ -187,22 +188,18 @@ const RunCard = ({ message }: { message: Message }) => {
         </>
       ) : (
         <div style={{ animation: 'fadeIn 0.3s ease' }}>
-          {/* Step List */}
           <div style={{ padding: '12px 16px', borderBottom: '1px solid #D4CFC6' }}>
             {metadata.steps?.map((step, idx) => (
               <StepRow key={idx} step={step} isLast={idx === metadata.steps.length - 1} />
             ))}
           </div>
-          {/* Full Output */}
-          {!isFailed && (
-            <div style={{ padding: '16px', background: '#F7F6F3', borderTop: '1px solid #D4CFC6', fontSize: '13px', color: '#1A1916', lineHeight: '1.7', whiteSpace: 'pre-line' }}>
-              {metadata.full_output}
-            </div>
-          )}
-          <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '8px 16px' }}>
+          <div style={{ padding: '14px 16px', background: '#F7F6F3', fontSize: '13px', color: '#1A1916', lineHeight: '1.7', whiteSpace: 'pre-line' }}>
+            {metadata.full_output}
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '6px 16px 10px' }}>
             <button 
-              onClick={() => setIsExpanded(false)}
-              style={{ fontSize: '12px', fontWeight: 500, color: '#2E5BBA', background: 'none', border: 'none', cursor: 'pointer' }}
+              onClick={onToggle}
+              style={{ fontSize: '12px', fontWeight: 500, color: '#2E5BBA', background: 'none', border: 'none', cursor: 'pointer', fontFamily: "'DM Sans', sans-serif" }}
             >
               Close ↑
             </button>
@@ -228,12 +225,13 @@ const StepRow = ({ step, isLast }: { step: Step; isLast: boolean }) => {
   };
 
   const icon = getIcon();
+  const badge = getStepBadge(step.step_type);
 
   return (
     <div style={{ borderBottom: isLast ? 'none' : '1px solid #F0EEE9' }}>
       <div 
         onClick={() => step.output && setIsOpen(!isOpen)}
-        style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '7px 0', cursor: step.output ? 'pointer' : 'default' }}
+        style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '8px 0', cursor: step.output ? 'pointer' : 'default' }}
       >
         <div style={{
           width: '20px',
@@ -244,23 +242,30 @@ const StepRow = ({ step, isLast }: { step: Step; isLast: boolean }) => {
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          fontSize: '10px',
+          fontSize: '11px',
           fontWeight: 600,
           border: icon.spinner ? '2px solid #2E5BBA' : 'none',
+          position: 'relative'
         }}>
-          {icon.spinner ? <div className="spinner-mini" /> : icon.char}
+          {icon.spinner ? (
+            <div style={{
+              width: '14px', height: '14px', border: '2px solid rgba(46, 91, 186, 0.2)',
+              borderTopColor: '#2E5BBA', borderRadius: '50%', animation: 'spin 1s linear infinite'
+            }} />
+          ) : icon.char}
         </div>
         <div style={{ fontSize: '13px', fontWeight: 500, color: '#1A1916', flex: 1 }}>{step.name}</div>
         <div style={{
-          background: step.step_type === 'auto' ? '#EAF5EE' : '#FEF3DC',
-          color: step.step_type === 'auto' ? '#1A7A4A' : '#8A5C00',
+          background: badge.bg,
+          color: badge.color,
           fontSize: '10px',
           fontWeight: 600,
-          padding: '2px 6px',
+          padding: '2px 7px',
           borderRadius: '4px',
-          textTransform: 'capitalize'
+          textTransform: 'uppercase',
+          letterSpacing: '0.3px'
         }}>
-          {step.step_type === 'auto' ? 'Auto' : 'Review'}
+          {badge.label}
         </div>
       </div>
       {isOpen && step.output && (
@@ -272,7 +277,7 @@ const StepRow = ({ step, isLast }: { step: Step; isLast: boolean }) => {
           fontSize: '12px',
           color: '#4A4845',
           lineHeight: 1.5,
-          maxHeight: '80px',
+          maxHeight: '120px',
           overflow: 'hidden'
         }}>
           {step.output}
@@ -421,18 +426,32 @@ const LiveRunWidget = ({ runId, agentId, onComplete }: { runId: string, agentId:
   );
 };
 
-const MessageBubble = ({ message }: { message: Message }) => {
+const MessageBubble = ({ message, isExpanded, onToggleRun }: { message: Message; isExpanded?: boolean; onToggleRun?: () => void }) => {
   const isAgent = message.role === 'agent';
   
-  if (message.message_type === 'run_card') return <RunCard message={message} />;
+  if (message.message_type === 'run_card') {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', width: '100%', marginBottom: '12px' }}>
+        <RunCard message={message} isExpanded={!!isExpanded} onToggle={onToggleRun || (() => {})} />
+        <div style={{ fontSize: '11px', color: '#7A7770', alignSelf: 'flex-start', marginTop: '3px', marginBottom: '12px' }}>
+          {formatTime(message.created_at)}
+        </div>
+      </div>
+    );
+  }
+
   if (message.message_type === 'memory_update') return (
-    <div style={{
-      display: 'inline-flex', alignItems: 'center', gap: '8px',
-      padding: '6px 12px', background: '#EAF5EE', border: '1px solid #B8DFC8',
-      borderRadius: '8px', fontSize: '12px', color: '#1A7A4A', fontWeight: 500,
-      alignSelf: 'flex-start', marginBottom: '12px'
-    }}>
-      🧠 {message.content}
+    <div style={{ display: 'flex', flexDirection: 'column', alignSelf: 'flex-start', marginBottom: '12px' }}>
+      <div style={{
+        display: 'inline-flex', alignItems: 'center', gap: '8px',
+        padding: '6px 12px', background: '#EAF5EE', border: '1px solid #B8DFC8',
+        borderRadius: '8px', fontSize: '12px', color: '#1A7A4A', fontWeight: 500
+      }}>
+        🧠 {message.content}
+      </div>
+      <div style={{ fontSize: '11px', color: '#7A7770', alignSelf: 'flex-start', marginTop: '3px', marginBottom: '12px' }}>
+        {formatTime(message.created_at)}
+      </div>
     </div>
   );
 
@@ -440,7 +459,7 @@ const MessageBubble = ({ message }: { message: Message }) => {
     <div style={{ display: 'flex', flexDirection: 'column', alignSelf: isAgent ? 'flex-start' : 'flex-end', maxWidth: '72%', marginBottom: '12px' }}>
       <div style={{
         fontSize: '10px', fontWeight: 600, letterSpacing: '0.5px', textTransform: 'uppercase',
-        color: isAgent ? '#2E5BBA' : '#7A7770', marginBottom: '4px', textAlign: isAgent ? 'left' : 'right'
+        color: '#7A7770', marginBottom: '4px', textAlign: isAgent ? 'left' : 'right'
       }}>
         {isAgent ? 'AGENT' : 'YOU'}
       </div>
@@ -448,9 +467,17 @@ const MessageBubble = ({ message }: { message: Message }) => {
         background: isAgent ? '#EEF2FB' : '#F0EEE9',
         border: isAgent ? '1px solid #C5D4F0' : '1px solid #D4CFC6',
         color: '#1A1916', padding: '11px 14px', borderRadius: '10px',
-        fontSize: '13px', lineHeight: '1.55', whiteSpace: 'pre-line'
+        fontSize: '13px', lineHeight: '1.55', whiteSpace: 'pre-line',
+        display: isAgent ? 'block' : 'inline-block'
       }}>
         {message.content}
+      </div>
+      <div style={{ 
+        fontSize: '11px', color: '#7A7770', 
+        alignSelf: isAgent ? 'flex-start' : 'flex-end', 
+        marginTop: '3px'
+      }}>
+        {formatTime(message.created_at)}
       </div>
     </div>
   );
@@ -487,8 +514,17 @@ function ConversationInner() {
         .eq('agent_id', agentId)
         .order('created_at', { ascending: true });
       if (msgErr) console.error('Error fetching messages:', msgErr);
+      
       if (msgData) {
-        setMessages(msgData as Message[]);
+        setMessages(prev => {
+          const merged = [...msgData];
+          prev.forEach(p => {
+            if (p.id.includes('.') && !merged.find(m => m.content === p.content && Math.abs(new Date(m.created_at).getTime() - new Date(p.created_at).getTime()) < 5000)) {
+               merged.push(p);
+            }
+          });
+          return merged.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+        });
       }
 
       // 3. Constant Recovery (if not already set)
@@ -525,11 +561,10 @@ function ConversationInner() {
   }, [autorun, agent]);
 
   // Auto-scroll
+  const bottomRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    if (threadRef.current) {
-      threadRef.current.scrollTop = threadRef.current.scrollHeight;
-    }
-  }, [messages, activeRunId]);
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages.length, activeRunId]);
 
   const handleSendMessage = async () => {
     if (!inputValue.trim() || isSending) return;
@@ -554,7 +589,7 @@ function ConversationInner() {
       content: inputValue.trim(),
       created_at: new Date().toISOString()
     };
-    setMessages(prev => [...prev, tempMsg]);
+    setMessages(prev => [...prev, tempMsg].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()));
 
     try {
       const { data: { session } } = await supabase.auth.getSession();
@@ -600,6 +635,8 @@ function ConversationInner() {
     } catch (e) { console.error(e); }
   };
 
+  const [expandedRuns, setExpandedRuns] = useState<Record<string, boolean>>({});
+
   // Group by day logic
   const threadElements = useMemo(() => {
     const elements: React.ReactNode[] = [];
@@ -611,7 +648,14 @@ function ConversationInner() {
         elements.push(<DayDivider key={`divider-${msg.id}`} date={date} />);
         lastDate = date;
       }
-      elements.push(<MessageBubble key={msg.id} message={msg} />);
+      elements.push(
+        <MessageBubble 
+          key={msg.id} 
+          message={msg} 
+          isExpanded={expandedRuns[msg.id]} 
+          onToggleRun={() => setExpandedRuns(prev => ({ ...prev, [msg.id]: !prev[msg.id] }))}
+        />
+      );
     });
 
     const hasRunCardForActiveRun = messages.some(m => m.run_id === activeRunId && m.message_type === 'run_card');
@@ -628,11 +672,13 @@ function ConversationInner() {
       );
     }
 
+    elements.push(<div key="bottom" ref={bottomRef} />);
+
     return elements;
-  }, [messages, activeRunId, agentId]);
+  }, [messages, activeRunId, agentId, expandedRuns]);
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '1fr 300px', height: '100vh', overflow: 'hidden', background: '#FFFFFF', fontFamily: "'DM Sans', sans-serif" }}>
+    <div style={{ display: 'grid', gridTemplateColumns: '200px 1fr 300px', height: '100vh', overflow: 'hidden', background: '#FFFFFF', fontFamily: "'DM Sans', sans-serif" }}>
       <style>{`
         @keyframes pulse {
           0%, 100% { opacity: 1; transform: scale(1); }
@@ -691,7 +737,7 @@ function ConversationInner() {
         </header>
 
         {/* Thread */}
-        <div ref={threadRef} style={{ flex: 1, overflowY: 'auto', padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 0, background: '#F7F6F3' }}>
+        <div ref={threadRef} style={{ flex: 1, overflowY: 'auto', padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 0, background: '#F7F6F3', minHeight: 0 }}>
           {threadElements}
         </div>
 
