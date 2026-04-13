@@ -68,7 +68,8 @@ export const runAgentWorkflow = task({
         const stepNum = key.split('_')[1];
         
         try {
-          console.log("Memory write - agentId:", run.agent_id, "hasApiKey:", !!apiKey);
+          logger.log("About to write memory");
+          logger.log("Memory write - agentId", { agentId: run.agent_id, hasApiKey: !!apiKey });
           const signal = await callLLM({
             provider: llmConfig.provider,
             model: llmConfig.model,
@@ -76,7 +77,7 @@ export const runAgentWorkflow = task({
             systemPrompt: "Extract the key preference or instruction from this user feedback in one sentence. Focus on tone, style, or content preferences. No preamble.",
             userTurn: `Feedback: ${feedbackText}`,
           });
-          console.log(`Memory LLM call result: success`);
+          logger.log(`Memory LLM call result: success`);
 
           const date = new Date().toISOString().split('T')[0];
           await updateAgentMemory(run.agent_id, `[${date}] User feedback at step ${stepNum}: ${signal}`, supabase);
@@ -84,8 +85,9 @@ export const runAgentWorkflow = task({
           processedFeedback.push(key);
           feedbackModified = true;
         } catch (err) {
-          console.log(`Memory LLM call result: error`);
+          logger.log(`Memory LLM call result: error`);
           logger.error(`Failed to process feedback for ${key}`, { err });
+          logger.error("Memory write failed", { error: err instanceof Error ? err.message : String(err) });
           // Skip silently as per requirements
         }
       }
@@ -161,11 +163,11 @@ export const runAgentWorkflow = task({
         }
       }
 
-      console.log(`Feedback found in global_state: ${feedbackFound ? 'yes' : 'no'}`);
+      logger.log(`Feedback found in global_state: ${feedbackFound ? 'yes' : 'no'}`);
 
       let feedbackInjection = "";
       if (feedbackFound) {
-        console.log(`Injecting feedback into step ${step.step_number} prompt`);
+        logger.log(`Injecting feedback into step ${step.step_number} prompt`);
         feedbackInjection = `IMPORTANT USER INSTRUCTION:\n${aggregatedFeedback.trim()}\nThis instruction was provided by the user and MUST be followed.\nIt overrides any default behavior for this step.\n\n`;
       }
 
@@ -214,7 +216,8 @@ Perform the objective now. Output ONLY what is requested in the OUT FORMAT. Do n
 
     // --- Step 1: Run Completion Summary ---
     try {
-      console.log("Memory write - agentId:", run.agent_id, "hasApiKey:", !!apiKey);
+      logger.log("About to write memory");
+      logger.log("Memory write - agentId", { agentId: run.agent_id, hasApiKey: !!apiKey });
       const summary = await callLLM({
         provider: llmConfig.provider,
         model: llmConfig.model,
@@ -222,13 +225,14 @@ Perform the objective now. Output ONLY what is requested in the OUT FORMAT. Do n
         systemPrompt: "Summarize what this agent run produced in 2-3 sentences. Focus on: what topics were covered, what the output was, any patterns worth remembering for future runs. Be specific and concise. No preamble.",
         userTurn: `Full Global State Context: ${JSON.stringify(globalState)}`,
       });
-      console.log(`Memory LLM call result: success`);
+      logger.log(`Memory LLM call result: success`);
 
       const date = new Date().toISOString().split('T')[0];
       await updateAgentMemory(run.agent_id, `[${date}] Run completed: ${summary}`, supabase);
     } catch (err) {
-      console.log(`Memory LLM call result: error`);
+      logger.log(`Memory LLM call result: error`);
       logger.error("Failed to generate run completion summary", { err });
+      logger.error("Memory write failed", { error: err instanceof Error ? err.message : String(err) });
     }
     // --- End Step 1 ---
 
@@ -269,7 +273,7 @@ async function failRun(runId: string, errorReason: string) {
 }
 
 async function updateAgentMemory(agentId: string, entry: string, supabase: any) {
-  console.log(`Memory write starting for agent ${agentId}`);
+  logger.log("Memory write starting", { agentId });
   try {
     const { data: agent } = await supabase.from('agents').select('agent_memory').eq('id', agentId).single();
     let currentMemory = agent?.agent_memory || "";
@@ -282,12 +286,12 @@ async function updateAgentMemory(agentId: string, entry: string, supabase: any) 
     const { error: updateErr } = await supabase.from('agents').update({ agent_memory: newMemory }).eq('id', agentId);
     
     if (updateErr) {
-      console.log(`Supabase memory update result: error`);
+      logger.log(`Supabase memory update result: error`);
     } else {
-      console.log(`Supabase memory update result: success`);
+      logger.log(`Supabase memory update result: success`);
     }
   } catch (err) {
-    console.log(`Supabase memory update result: error`);
+    logger.log(`Supabase memory update result: error`);
     logger.error("Failed to update agent memory", { err });
     // Never crash the worker
   }
