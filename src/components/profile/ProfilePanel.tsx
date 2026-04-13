@@ -14,15 +14,11 @@ interface ProfileData {
     schedule: string;
     agent_memory: string;
     category: string;
+    total_runs?: number;
+    human_hours_per_run?: number;
   };
   steps: any[];
   runs: any[];
-  stats: {
-    total_runs: number;
-    total_time_saved: string;
-    total_cost: string;
-    avg_run_time: string;
-  };
 }
 
 interface ProfilePanelProps {
@@ -110,7 +106,21 @@ export default function ProfilePanel({ agentId, onClose }: ProfilePanelProps) {
     );
   }
 
-  const { agent, steps, runs, stats } = data;
+  const { agent, steps, runs } = data;
+
+  // Format stats safely since API returns them on the agent object, not a separate stats object
+  const totalRuns = agent.total_runs || 0;
+  const avgRunTimeSec = (agent as any).avg_run_time || 0;
+  const timeSavedHours = ((agent.human_hours_per_run || 0) * totalRuns).toFixed(1);
+  
+  const stats = {
+    total_runs: totalRuns,
+    total_time_saved: `${timeSavedHours}h`,
+    total_cost: '$0.00',
+    avg_run_time: avgRunTimeSec > 60 
+      ? `${Math.floor(avgRunTimeSec / 60)}m ${Math.round(avgRunTimeSec % 60)}s` 
+      : `${avgRunTimeSec}s`
+  };
 
   const renderStatusDot = (status: string) => {
     let color = 'var(--text-tertiary)';
