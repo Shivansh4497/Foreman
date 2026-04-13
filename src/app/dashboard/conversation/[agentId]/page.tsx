@@ -544,6 +544,7 @@ function ConversationInner() {
   const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
   const [showRunConfirm, setShowRunConfirm] = useState(false);
   const [isRestarting, setIsRestarting] = useState(false);
+  const [syncTrigger, setSyncTrigger] = useState(0);
 
   const threadRef = useRef<HTMLDivElement>(null);
 
@@ -614,7 +615,7 @@ function ConversationInner() {
     }
 
     recoverActiveRun();
-  }, [agentId]);
+  }, [agentId, syncTrigger]);
 
   // Debug Logging State Transitions
   useEffect(() => {
@@ -806,7 +807,7 @@ function ConversationInner() {
           </div>
           <div style={{ display: 'flex', gap: '8px' }}>
             <button 
-              onClick={handleRunNow}
+              onClick={() => handleRunNow()}
               style={{ background: '#1A1916', color: '#FFFFFF', border: 'none', borderRadius: '8px', padding: '7px 16px', fontSize: '13px', fontWeight: 500, cursor: 'pointer' }}
             >
               Run now
@@ -887,8 +888,7 @@ function ConversationInner() {
               <button 
                 onClick={() => {
                   setShowRunConfirm(false);
-                  // Force a recovery poll
-                  window.dispatchEvent(new Event('sync-run'));
+                  setSyncTrigger(prev => prev + 1);
                 }}
                 style={{
                   padding: '12px', background: '#F7F6F3', border: '1px solid #D4CFC6', borderRadius: '8px',

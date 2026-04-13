@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { tasks } from '@trigger.dev/sdk/v3';
+import { tasks, runs } from '@trigger.dev/sdk/v3';
 import { runAgentWorkflow } from '@/trigger/runAgentWorkflow';
 
 export async function POST(request: Request) {
@@ -55,7 +55,7 @@ export async function POST(request: Request) {
           // 1. Cancel on Trigger.dev if we have a task ID
           if (run.trigger_task_id) {
             try {
-              await tasks.cancel(run.trigger_task_id);
+              await runs.cancel(run.trigger_task_id);
               console.log(`[runs/start] Cancelled Trigger.dev task: ${run.trigger_task_id}`);
             } catch (err) {
               console.error(`[runs/start] Failed to cancel Trigger.dev task: ${err}`);
