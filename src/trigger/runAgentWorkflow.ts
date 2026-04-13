@@ -217,23 +217,29 @@ Perform the objective now. Output ONLY what is requested in the OUT FORMAT. Do n
 
     // --- Step 1: Run Completion Summary ---
     try {
-      logger.log("About to write memory");
-      logger.log("Memory write - agentId", { agentId: run.agent_id, hasApiKey: !!apiKey });
+      logger.info("About to write memory summary");
+      
+      // Prune state to avoid context explosion/payload limits
+      const summaryContext = Object.keys(globalState)
+        .filter(k => k.endsWith('_output') || k.includes('_feedback'))
+        .reduce((obj, key) => {
+          obj[key] = globalState[key];
+          return obj;
+        }, {} as Record<string, any>);
+
       const summary = await callLLM({
         provider: llmConfig.provider,
         model: llmConfig.model,
         apiKey: apiKey,
         systemPrompt: "Summarize what this agent run produced in 2-3 sentences. Focus on: what topics were covered, what the output was, any patterns worth remembering for future runs. Be specific and concise. No preamble.",
-        userTurn: `Full Global State Context: ${JSON.stringify(globalState)}`,
+        userTurn: `Pruned Run Context (Outputs and Feedback): ${JSON.stringify(summaryContext)}`,
       });
-      logger.log(`Memory LLM call result: success`);
+      logger.info(`Memory LLM call result: success`);
 
       const date = new Date().toISOString().split('T')[0];
       await updateAgentMemory(run.agent_id, `[${date}] Run completed: ${summary}`, supabase);
     } catch (err) {
-      logger.log(`Memory LLM call result: error`);
-      logger.error("Failed to generate run completion summary", { err });
-      logger.error("Memory write failed", { error: err instanceof Error ? err.message : String(err) });
+      logger.error("Failed to generate run completion summary", { err: err instanceof Error ? err.message : String(err) });
     }
     // --- End Step 1 ---
 
@@ -274,11 +280,15 @@ async function failRun(runId: string, errorReason: string) {
 }
 
 async function updateAgentMemory(agentId: string, entry: string, supabase: any) {
-  logger.log("Memory write starting", { agentId });
+  logger.info("Memory write starting", { agentId });
   try {
-    const { data: agent } = await supabase.from('agents').select('agent_memory').eq('id', agentId).single();
+    const { data: agent, error: fetchErr } = await supabase.from('agents').select('agent_memory').eq('id', agentId).single();
+    if (fetchErr) {
+      logger.error("Failed to fetch current memory during update", { fetchErr });
+      return;
+    }
+
     let currentMemory = agent?.agent_memory || "";
-    
     let newMemory = `${entry}\n${currentMemory}`;
     if (newMemory.length > 2000) {
       newMemory = newMemory.substring(0, 2000);
@@ -287,13 +297,11 @@ async function updateAgentMemory(agentId: string, entry: string, supabase: any) 
     const { error: updateErr } = await supabase.from('agents').update({ agent_memory: newMemory }).eq('id', agentId);
     
     if (updateErr) {
-      logger.log(`Supabase memory update result: error`);
+      logger.error(`Supabase memory update result: error`, { updateErr });
     } else {
-      logger.log(`Supabase memory update result: success`);
+      logger.info(`Supabase memory update result: success`);
     }
   } catch (err) {
-    logger.log(`Supabase memory update result: error`);
-    logger.error("Failed to update agent memory", { err });
-    // Never crash the worker
+    logger.error("Failed to update agent memory (catch block)", { err: err instanceof Error ? err.message : String(err) });
   }
 }
