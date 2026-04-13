@@ -29,61 +29,116 @@ export default function RunExecutionPage() {
     try {
       parsed = typeof output === 'string' ? JSON.parse(output) : output;
     } catch (e) {
-      return <div style={{ whiteSpace: 'pre-wrap' }}>{output}</div>;
+      return <p style={{ margin: 0 }}>{String(output)}</p>;
     }
 
-    // 1. Array of objects with "topic" or "title" -> bullet list
-    if (Array.isArray(parsed) && parsed.length > 0 && (parsed[0].topic || parsed[0].title)) {
+    // 1. If result has "post_draft" key -> return just the post_draft value as a <p> tag
+    if (parsed && typeof parsed === 'object' && parsed.post_draft) {
       return (
-        <ul style={{ margin: 0, paddingLeft: '20px', listStyleType: 'disc' }}>
-          {parsed.map((item: any, i: number) => (
-            <li key={i} style={{ marginBottom: '4px' }}>
-              {item.topic || item.title}
+        <p style={{ margin: 0, lineHeight: '1.6' }}>
+          {parsed.post_draft}
+        </p>
+      );
+    }
+
+    // 2. If result has "topic_sources" array
+    if (parsed && typeof parsed === 'object' && Array.isArray(parsed.topic_sources)) {
+      return (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          {parsed.topic_sources.map((ts: any, idx: number) => (
+            <div key={idx}>
+              <div style={{ fontWeight: 600, fontSize: '13px', color: '#1A1916', marginBottom: '4px' }}>
+                {ts.topic}
+              </div>
+              {Array.isArray(ts.sources) && (
+                <ul style={{ margin: 0, paddingLeft: '16px', listStyleType: 'disc' }}>
+                  {ts.sources.map((s: any, sIdx: number) => (
+                    <li key={sIdx} style={{ fontSize: '12px', color: '#4A4845', lineHeight: '1.6' }}>
+                      {s.summary}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          ))}
+        </div>
+      );
+    }
+
+    // 3. If result has "steps" array
+    if (parsed && typeof parsed === 'object' && Array.isArray(parsed.steps)) {
+      return (
+        <ul style={{ margin: 0, paddingLeft: '16px', listStyleType: 'disc' }}>
+          {parsed.steps.map((step: any, idx: number) => (
+            <li key={idx} style={{ fontSize: '12px', color: '#4A4845', lineHeight: '1.6' }}>
+              {typeof step === 'string' ? step : (step.name || step.title || JSON.stringify(step))}
             </li>
           ))}
         </ul>
       );
     }
 
-    // 2. Object with "post_draft" -> formatted text block
-    if (parsed && typeof parsed === 'object' && parsed.post_draft) {
+    // 4. If result is an array -> render each item's first string value as a bullet
+    if (Array.isArray(parsed)) {
       return (
-        <div style={{ whiteSpace: 'pre-wrap', lineHeight: '1.6' }}>
-          {parsed.post_draft}
-        </div>
-      );
-    }
-
-    // 3. Plain string
-    if (typeof parsed === 'string') {
-      return <div style={{ whiteSpace: 'pre-wrap' }}>{parsed}</div>;
-    }
-
-    // 4. Other JSON -> clean key-value list
-    if (parsed && typeof parsed === 'object') {
-      return (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-          {Object.entries(parsed).map(([key, value]) => {
-            const displayKey = key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-            let displayValue = '';
-            if (typeof value === 'object') {
-              displayValue = JSON.stringify(value).replace(/[[\]{}"]/g, '').replace(/:/g, ': ').replace(/,/g, ', ');
-            } else {
-              displayValue = String(value);
+        <ul style={{ margin: 0, paddingLeft: '16px', listStyleType: 'disc' }}>
+          {parsed.map((item: any, idx: number) => {
+            let val = '';
+            if (typeof item === 'string') val = item;
+            else if (item && typeof item === 'object') {
+              val = Object.values(item).find(v => typeof v === 'string') as string || JSON.stringify(item);
             }
-            
             return (
-              <div key={key} style={{ fontSize: '13px' }}>
-                <span style={{ fontWeight: 600, color: 'var(--text-primary)', marginRight: '8px' }}>{displayKey}:</span>
-                <span style={{ color: 'var(--text-secondary)' }}>{displayValue}</span>
-              </div>
+              <li key={idx} style={{ fontSize: '12px', color: '#4A4845', lineHeight: '1.6' }}>
+                {val}
+              </li>
             );
           })}
-        </div>
+        </ul>
       );
     }
 
-    return <div style={{ whiteSpace: 'pre-wrap' }}>{String(output)}</div>;
+    // 5. If result is an object with string values -> render as key: value lines
+    if (parsed && typeof parsed === 'object') {
+      const stringEntries = Object.entries(parsed).filter(([_, v]) => typeof v === 'string');
+      if (stringEntries.length > 0) {
+        return (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+            {stringEntries.map(([key, value]) => (
+              <div key={key} style={{ fontSize: '12px', color: '#4A4845', lineHeight: '1.6' }}>
+                <span style={{ fontWeight: 600, color: '#1A1916', marginRight: '4px' }}>{key.replace(/_/g, ' ')}:</span>
+                {String(value)}
+              </div>
+            ))}
+          </div>
+        );
+      }
+
+      // 6. Fallback -> render first 3 string values found anywhere in the object
+      const foundStrings: string[] = [];
+      const findStrings = (obj: any) => {
+        if (foundStrings.length >= 3) return;
+        if (!obj || typeof obj !== 'object') return;
+        for (const val of Object.values(obj)) {
+          if (typeof val === 'string' && val.length > 5 && !val.includes('http')) {
+            foundStrings.push(val);
+          } else if (val && typeof val === 'object') {
+            findStrings(val);
+          }
+          if (foundStrings.length >= 3) return;
+        }
+      };
+      findStrings(parsed);
+      if (foundStrings.length > 0) {
+        return (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            {foundStrings.map((s, i) => <p key={i} style={{ margin: 0, fontSize: '12px', color: '#4A4845', lineHeight: '1.6' }}>{s}</p>)}
+          </div>
+        );
+      }
+    }
+
+    return <p style={{ margin: 0 }}>{String(output)}</p>;
   };
 
   // Setup loop
