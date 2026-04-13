@@ -170,12 +170,22 @@ export const runAgentWorkflow = task({
         userFeedbackInjection = `\n\nCRITICAL OVERRIDE: Do not forget to incorporate the human feedback:\n${aggregatedFeedback.trim()}`;
       }
 
+      // Prepare a truncated notepad for the LLM to avoid 429 Rate Limits (TPM)
+      const executionState = Object.keys(globalState).reduce((obj, key) => {
+        const val = globalState[key];
+        // Truncate previous step outputs to ~2000 chars to keep prompt stable under 6k TPM
+        obj[key] = (typeof val === 'string' && val.length > 2000) 
+          ? val.substring(0, 2000) + "... [content truncated for token limits]" 
+          : val;
+        return obj;
+      }, {} as Record<string, any>);
+
       const systemPrompt = `You are an automated step executor within the Foreman workforce architecture.
 You must perfectly execute the following step based strictly on the provided instructions.
 Enforce the QUALITY RULES. Ensure your output conforms precisely to the OUTPUT FORMAT.
 ${run.agents.agent_memory ? `\nAgent memory from previous runs: ${run.agents.agent_memory}\n` : ""}
 CURRENT NOTEPAD STATE (Outputs from previous steps):
-${JSON.stringify(globalState, null, 2)}
+${JSON.stringify(executionState, null, 2)}
 
 STEP DEFINITION:
 OBJECTIVE: ${step.objective}
