@@ -292,9 +292,6 @@ const LiveRunWidget = ({ runId, agentId, onComplete }: { runId: string, agentId:
       const { data: runData } = await supabase.from('agent_runs').select('*').eq('id', runId).single();
       if (runData) {
         setRun(runData);
-        if (runData.status === 'completed' || runData.status === 'failed') {
-          onComplete();
-        }
       }
 
       const { data: stepsData } = await supabase.from('agent_steps')
@@ -344,9 +341,12 @@ const LiveRunWidget = ({ runId, agentId, onComplete }: { runId: string, agentId:
         alignItems: 'center',
         justifyContent: 'space-between',
         borderBottom: '1px solid #D4CFC6',
+        background: run.status === 'failed' ? '#FEE2E2' : 'transparent',
       }}>
-        <div style={{ fontSize: '12px', fontWeight: 600, color: '#1A1916' }}>Starting run...</div>
-        <Badge status="running" pulse />
+        <div style={{ fontSize: '12px', fontWeight: 600, color: '#1A1916' }}>
+          {run.status === 'completed' ? 'Run finished' : run.status === 'failed' ? 'Run failed' : 'Starting run...'}
+        </div>
+        <Badge status={run.status === 'completed' ? 'completed' : run.status === 'failed' ? 'failed' : 'running'} pulse={run.status === 'running'} />
       </div>
 
       <div style={{ padding: '12px 16px' }}>
@@ -491,28 +491,31 @@ function ConversationInner() {
         setMessages(msgData as Message[]);
       }
 
-      // 3. Active Run Recovery (on initial load if not already set)
-      if (!activeRunId) {
-        const { data: activeRunData, error: activeRunErr } = await supabase
-          .from('agent_runs')
-          .select('id')
-          .eq('agent_id', agentId)
-          .in('status', ['running', 'waiting_for_human'])
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .maybeSingle();
-
-        if (activeRunErr) console.error('Error recovering active run:', activeRunErr);
-        if (activeRunData) {
-          setActiveRunId(activeRunData.id);
+      // 3. Constant Recovery (if not already set)
+      setActiveRunId(current => {
+        if (!current) {
+          supabase
+            .from('agent_runs')
+            .select('id')
+            .eq('agent_id', agentId)
+            .in('status', ['running', 'waiting_for_human'])
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle()
+            .then(({ data: activeRunData }) => {
+              if (activeRunData) {
+                setActiveRunId(activeRunData.id);
+              }
+            });
         }
-      }
+        return current;
+      });
     }
 
     fetchData();
     const interval = setInterval(fetchData, 3000);
     return () => clearInterval(interval);
-  }, [agentId, activeRunId]);
+  }, [agentId]);
 
   // Handle Autorun
   useEffect(() => {
@@ -611,8 +614,18 @@ function ConversationInner() {
       elements.push(<MessageBubble key={msg.id} message={msg} />);
     });
 
-    if (activeRunId) {
+    const hasRunCardForActiveRun = messages.some(m => m.run_id === activeRunId && m.message_type === 'run_card');
+    if (activeRunId && !hasRunCardForActiveRun) {
       elements.push(<LiveRunWidget key="live-run" runId={activeRunId} agentId={agentId as string} onComplete={() => setActiveRunId(null)} />);
+    }
+
+    if (elements.length === 0) {
+      return (
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', opacity: 0.5 }}>
+          <div style={{ fontSize: '14px', fontWeight: 500, color: '#7A7770', marginBottom: '8px' }}>No activity yet</div>
+          <div style={{ fontSize: '12px', color: '#7A7770' }}>Send a message or click 'Run now' to get started.</div>
+        </div>
+      );
     }
 
     return elements;
