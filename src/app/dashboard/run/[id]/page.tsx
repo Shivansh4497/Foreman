@@ -55,7 +55,28 @@ export default function RunExecutionPage() {
       );
     }
 
-    // 2. If result has "topic_sources" array
+    // 2. If result has "topic", "summary", and "key_points" -> specialized structural rendering
+    if (parsed && typeof parsed === 'object' && parsed.topic && parsed.summary && Array.isArray(parsed.key_points)) {
+      return (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          <div style={{ fontWeight: 600, fontSize: '13px', color: '#1A1916' }}>
+            {parsed.topic}
+          </div>
+          <p style={{ margin: 0, fontSize: '12px', color: '#4A4845', lineHeight: '1.6' }}>
+            {parsed.summary}
+          </p>
+          <ul style={{ margin: 0, paddingLeft: '16px', listStyleType: 'disc' }}>
+            {parsed.key_points.map((point: string, idx: number) => (
+              <li key={idx} style={{ fontSize: '12px', color: '#4A4845', lineHeight: '1.6' }}>
+                {point}
+              </li>
+            ))}
+          </ul>
+        </div>
+      );
+    }
+
+    // 3. If result has "topic_sources" array
     if (parsed && typeof parsed === 'object' && Array.isArray(parsed.topic_sources)) {
       return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
