@@ -16,6 +16,11 @@ export default function RunExecutionPage() {
   const [humanInput, setHumanInput] = useState('');
   const [expandedSteps, setExpandedSteps] = useState<Record<string, boolean>>({});
   const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const [agentMemoryEntries, setAgentMemoryEntries] = useState<string[]>([]);
+  const [showRejectInput, setShowRejectInput] = useState(false);
+  const [rejectFeedback, setRejectFeedback] = useState('');
+  const [rejecting, setRejecting] = useState(false);
+  const [memoryFetched, setMemoryFetched] = useState(false);
 
   const toggleStep = (stepNumber: string) => {
     setExpandedSteps(prev => ({
@@ -217,6 +222,24 @@ export default function RunExecutionPage() {
           .order('step_number', { ascending: true });
         if (s) setSteps(s);
       }
+      if (run.status === 'completed' && !memoryFetched) {
+        const { data: agentData } = await supabase
+          .from('agents')
+          .select('agent_memory')
+          .eq('id', run.agent_id)
+          .single();
+        
+        if (agentData?.agent_memory) {
+          const today = new Date().toISOString().split('T')[0];
+          const lines = agentData.agent_memory.split('\n');
+          const filtered = lines
+            .filter(l => l.startsWith(`[${today}]`))
+            .map(l => l.replace(`[${today}]`, '').trim())
+            .slice(0, 5);
+          setAgentMemoryEntries(filtered);
+        }
+        setMemoryFetched(true);
+      }
       setLoading(false);
     }
 
@@ -247,6 +270,32 @@ export default function RunExecutionPage() {
       if (refreshRun) setAgentRuns(refreshRun);
     }
     setSubmitting(false);
+  };
+
+  const handleReject = async () => {
+    if (!rejectFeedback.trim()) return;
+    setRejecting(true);
+    const { data: { session } } = await supabase.auth.getSession();
+    
+    try {
+      const res = await fetch('/api/runs/reject', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session?.access_token}`
+        },
+        body: JSON.stringify({ run_id: runId, feedback: rejectFeedback })
+      });
+      
+      const data = await res.json();
+      if (data.success && data.new_run_id) {
+        router.push(`/dashboard/run/${data.new_run_id}`);
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setRejecting(false);
+    }
   };
 
   if (loading) {
@@ -426,9 +475,81 @@ export default function RunExecutionPage() {
       </div>
       
       {agentRuns.status === 'completed' && (
-        <div style={{ marginTop: '30px', padding: '24px', background: 'var(--green-bg)', border: '1px solid var(--green-border)', borderRadius: '12px', textAlign: 'center' }}>
-          <div style={{ fontSize: '16px', fontWeight: 600, color: 'var(--green)', marginBottom: '8px' }}>Run Completed Successfully</div>
-          <p style={{ fontSize: '13px', color: 'var(--green)' }}>All automated steps and checkpoints passed. Outputs have been saved to the agent's memory banks permanently.</p>
+        <div style={{ marginTop: '30px', animation: 'fadeIn 0.5s ease-out' }}>
+          {agentMemoryEntries.length > 0 && (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '14px', justifyContent: 'center' }}>
+              {agentMemoryEntries.map((entry, idx) => (
+                <div key={idx} style={{ 
+                  display: 'inline-flex', alignItems: 'center', gap: '6px',
+                  padding: '5px 10px', background: '#EAF5EE', border: '1px solid #B8DFC8',
+                  borderRadius: '8px', fontSize: '12px', color: '#1A7A4A', fontWeight: 500
+                }}>
+                  🧠 {entry}
+                </div>
+              ))}
+            </div>
+          )}
+          
+          <div style={{ padding: '24px', background: 'var(--green-bg)', border: '1px solid var(--green-border)', borderRadius: '12px', textAlign: 'center' }}>
+            <div style={{ fontSize: '16px', fontWeight: 600, color: 'var(--green)', marginBottom: '8px' }}>Run Completed Successfully</div>
+            <p style={{ fontSize: '13px', color: 'var(--green)', margin: '0 0 20px 0' }}>All automated steps and checkpoints passed. Outputs have been saved to the agent's memory banks permanently.</p>
+            
+            {!showRejectInput ? (
+              <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
+                <button 
+                  onClick={() => router.push('/dashboard')}
+                  style={{ padding: '10px 20px', fontSize: '14px', fontWeight: 500, color: '#FFFFFF', background: '#1A1916', border: 'none', borderRadius: '10px', cursor: 'pointer' }}
+                >
+                  ✓ Approve & close
+                </button>
+                <button 
+                  onClick={() => setShowRejectInput(true)}
+                  style={{ padding: '10px 20px', fontSize: '14px', fontWeight: 500, color: '#991B1B', background: '#FEE2E2', border: '1px solid #FECACA', borderRadius: '10px', cursor: 'pointer' }}
+                >
+                  Reject output
+                </button>
+              </div>
+            ) : (
+              <div style={{ textAlign: 'left', background: '#FFFFFF', border: '1px solid var(--border)', borderRadius: '12px', padding: '20px', marginTop: '20px' }}>
+                <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '4px' }}>What wasn't right about this run?</div>
+                <div style={{ fontSize: '12px', color: 'var(--text-tertiary)', marginBottom: '16px' }}>Your feedback will be saved to the agent's memory and a fresh run will start immediately.</div>
+                
+                <textarea 
+                  rows={3}
+                  value={rejectFeedback}
+                  onChange={(e) => setRejectFeedback(e.target.value)}
+                  placeholder="e.g. The tone was too formal, or the output format was missing the summary section..."
+                  style={{ 
+                    width: '100%', padding: '12px', border: '1.5px solid var(--border)', borderRadius: '8px',
+                    fontSize: '13px', fontFamily: "'DM Sans', sans-serif", color: '#1A1916', background: '#FFFFFF',
+                    resize: 'none', marginBottom: '16px', outline: 'none'
+                  }}
+                />
+                
+                <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+                  <button 
+                    onClick={() => { setShowRejectInput(false); setRejectFeedback(''); }}
+                    disabled={rejecting}
+                    style={{ padding: '8px 16px', fontSize: '13px', fontWeight: 500, color: 'var(--text-secondary)', background: '#FFFFFF', border: '1px solid var(--border)', borderRadius: '8px', cursor: rejecting ? 'not-allowed' : 'pointer' }}
+                  >
+                    Cancel
+                  </button>
+                  <button 
+                    onClick={handleReject}
+                    disabled={rejecting || !rejectFeedback.trim()}
+                    style={{ 
+                      padding: '8px 16px', fontSize: '13px', fontWeight: 500, color: '#FFFFFF', 
+                      background: '#1A1916', border: 'none', borderRadius: '8px', 
+                      cursor: (rejecting || !rejectFeedback.trim()) ? 'not-allowed' : 'pointer',
+                      opacity: (rejecting || !rejectFeedback.trim()) ? 0.6 : 1
+                    }}
+                  >
+                    {rejecting ? 'Updating memory & restarting...' : 'Submit & rerun'}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>
