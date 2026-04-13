@@ -18,8 +18,11 @@ export async function callLLM(opts: {
     'Gemini 1.5 Flash': 'gemini-1.5-flash-latest',
     'Llama 3.3 70B (Recommended)': 'llama-3.3-70b-versatile',
     'Llama 3.1 8B': 'llama-3.1-8b-instant',
-    'Llama 3': 'llama-3.3-70b-versatile', // Fallback for old saved string
-    'Mixtral 8x7b': 'llama-3.1-8b-instant', // Redirection for decommissioned model
+    'llama-3.3-70b-versatile': 'llama-3.3-70b-versatile',
+    'llama-3.1-8b-instant': 'llama-3.1-8b-instant',
+    'llama 3.1 8b': 'llama-3.1-8b-instant', // Fallback for case-mismatch seen in logs
+    'Llama 3': 'llama-3.3-70b-versatile', 
+    'Mixtral 8x7b': 'llama-3.1-8b-instant',
   };
   const apiModel = modelMapping[model] || model;
 

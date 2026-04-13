@@ -13,7 +13,7 @@ const PROVIDERS: Record<string, { models: string[]; placeholder: string }> = {
   OpenAI: { models: ['GPT-4o (Recommended)', 'GPT-4o mini'], placeholder: 'sk-proj-••••••••••••••••••••••' },
   Anthropic: { models: ['Claude 3.5 Sonnet', 'Claude 3 Haiku'], placeholder: 'sk-ant-••••••••••••••••••••••' },
   Gemini: { models: ['Gemini 1.5 Pro', 'Gemini 1.5 Flash'], placeholder: 'AIza••••••••••••••••••••••' },
-  Groq: { models: ['Llama 3.3 70B (Recommended)', 'Llama 3.1 8B'], placeholder: 'gsk_••••••••••••••••••••••' },
+  Groq: { models: ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant'], placeholder: 'gsk_••••••••••••••••••••••' },
 };
 
 export default function ApiKeyTab() {
