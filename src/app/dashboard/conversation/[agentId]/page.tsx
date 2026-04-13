@@ -381,86 +381,89 @@ export default function AgentConversationPage() {
     <div style={{ 
       display: 'grid', 
       gridTemplateColumns: windowWidth < 1200 ? '1fr' : '1fr 300px',
+      gridTemplateRows: '56px 1fr',
       height: '100vh', 
       background: '#FFFFFF',
       overflow: 'hidden'
     }}>
-      {/* COLUMN 2: CHAT PANEL */}
+      {/* GLOBAL HEADER (Spans both columns) */}
+      <header style={{
+        gridColumn: windowWidth < 1200 ? '1' : '1 / span 2',
+        height: '56px',
+        background: '#FFFFFF',
+        borderBottom: '1px solid #D4CFC6',
+        padding: '0 20px',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        flexShrink: 0,
+        zIndex: 20
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center' }}>
+          <div style={{
+            width: '32px',
+            height: '32px',
+            background: '#1A1916',
+            borderRadius: '8px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: '#FFFFFF',
+            fontSize: '14px',
+            fontWeight: 600,
+            marginRight: '10px'
+          }}>
+            {agent?.name?.charAt(0).toUpperCase() || 'A'}
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center' }}>
+            <span style={{ fontSize: '14px', fontWeight: 600, color: '#1A1916' }}>{agent?.name || 'Loading...'}</span>
+            {agent && <div style={{ marginLeft: '8px' }}>{renderStatusBadge(agent.status)}</div>}
+          </div>
+        </div>
+
+        <div style={{ display: 'flex' }}>
+          <button 
+            onClick={handleRunNow}
+            style={{
+              background: '#1A1916',
+              color: '#FFFFFF',
+              padding: '7px 16px',
+              fontSize: '13px',
+              fontWeight: 500,
+              border: 'none',
+              borderRadius: '8px',
+              cursor: 'pointer'
+            }}
+          >
+            Run now
+          </button>
+          <button 
+            onClick={handlePause}
+            style={{
+              marginLeft: '8px',
+              background: '#FFFFFF',
+              border: '1px solid #D4CFC6',
+              color: '#4A4845',
+              padding: '7px 16px',
+              fontSize: '13px',
+              fontWeight: 500,
+              borderRadius: '8px',
+              cursor: 'pointer'
+            }}
+          >
+            {agent?.status === 'paused' ? 'Resume' : 'Pause'}
+          </button>
+        </div>
+      </header>
+
+      {/* COLUMN 1: CHAT PANEL */}
       <div style={{ 
         display: 'flex', 
         flexDirection: 'column', 
-        height: '100vh', 
+        height: 'calc(100vh - 56px)', 
         overflow: 'hidden',
         borderRight: windowWidth >= 1200 ? '1px solid #D4CFC6' : 'none'
       }}>
-        {/* CHAT HEADER */}
-        <header style={{
-          height: '56px',
-          background: '#FFFFFF',
-          borderBottom: '1px solid #D4CFC6',
-          padding: '0 20px',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          flexShrink: 0
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center' }}>
-            <div style={{
-              width: '32px',
-              height: '32px',
-              background: '#1A1916',
-              borderRadius: '8px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: '#FFFFFF',
-              fontSize: '14px',
-              fontWeight: 600,
-              marginRight: '10px'
-            }}>
-              {agent?.name?.charAt(0).toUpperCase() || 'A'}
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center' }}>
-              <span style={{ fontSize: '14px', fontWeight: 600, color: '#1A1916' }}>{agent?.name || 'Loading...'}</span>
-              {agent && <div style={{ marginLeft: '8px' }}>{renderStatusBadge(agent.status)}</div>}
-            </div>
-          </div>
-
-          <div style={{ display: 'flex' }}>
-            <button 
-              onClick={handleRunNow}
-              style={{
-                background: '#1A1916',
-                color: '#FFFFFF',
-                padding: '7px 16px',
-                fontSize: '13px',
-                fontWeight: 500,
-                border: 'none',
-                borderRadius: '8px',
-                cursor: 'pointer'
-              }}
-            >
-              Run now
-            </button>
-            <button 
-              onClick={handlePause}
-              style={{
-                marginLeft: '8px',
-                background: '#FFFFFF',
-                border: '1px solid #D4CFC6',
-                color: '#4A4845',
-                padding: '7px 16px',
-                fontSize: '13px',
-                fontWeight: 500,
-                borderRadius: '8px',
-                cursor: 'pointer'
-              }}
-            >
-              {agent?.status === 'paused' ? 'Resume' : 'Pause'}
-            </button>
-          </div>
-        </header>
-
         {/* CHAT THREAD */}
         <div 
           ref={scrollRef}
@@ -689,53 +692,20 @@ export default function AgentConversationPage() {
       {windowWidth >= 1200 && (
         <div style={{ 
           width: '300px', 
-          borderLeft: '1px solid #D4CFC6',
           background: '#FFFFFF', 
           display: 'flex', 
           flexDirection: 'column',
-          height: '100vh', 
+          height: 'calc(100vh - 56px)', 
           overflow: 'hidden'
         }}>
-          {/* PROFILE HEADER */}
-          <div style={{ padding: '16px', borderBottom: '1px solid #D4CFC6', flexShrink: 0 }}>
-            <div style={{ display: 'flex', alignItems: 'center' }}>
-              <div style={{
-                width: '40px',
-                height: '40px',
-                background: '#1A1916',
-                borderRadius: '10px',
-                color: '#FFFFFF',
-                fontSize: '18px',
-                fontWeight: 600,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center'
-              }}>
-                {profileAgent?.name?.charAt(0).toUpperCase() || 'A'}
-              </div>
-              <div style={{ marginLeft: '10px' }}>
-                <div style={{ 
-                  fontFamily: "'DM Serif Display', serif", 
-                  fontSize: '16px', 
-                  color: '#1A1916',
-                  letterSpacing: '-0.3px',
-                  lineHeight: 1.2
-                }}>
-                  {profileAgent?.name || 'Loading...'}
-                </div>
-                {profileAgent && (
-                  <div style={{ marginTop: '2px', fontSize: '10px' }}>
-                    {renderStatusBadge(profileAgent.status)}
-                  </div>
-                )}
-              </div>
-            </div>
-            {profileAgent?.schedule && (
-              <div style={{ fontSize: '11px', color: '#7A7770', marginTop: '4px' }}>
+          {/* PROFILE HEADER (Muted) */}
+          {profileAgent?.schedule && (
+            <div style={{ padding: '16px', borderBottom: '1px solid #D4CFC6', flexShrink: 0 }}>
+              <div style={{ fontSize: '11px', color: '#7A7770' }}>
                 {profileAgent.schedule}
               </div>
-            )}
-          </div>
+            </div>
+          )}
 
           {/* STATS BAR */}
           {(() => {
