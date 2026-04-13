@@ -146,11 +146,29 @@ export const runAgentWorkflow = task({
       // Execute Automated LLM Step
       logger.info(`Executing step ${step.step_number}: ${step.objective}`);
 
+      // Gather human feedback to inject
+      let aggregatedFeedback = "";
+      let feedbackFound = false;
+      for (const key of Object.keys(globalState)) {
+        if (key.match(/^step_\d+_human_feedback$/)) {
+          aggregatedFeedback += `- ${globalState[key]}\n`;
+          feedbackFound = true;
+        }
+      }
+
+      console.log(`Feedback found in global_state: ${feedbackFound ? 'yes' : 'no'}`);
+
+      let feedbackInjection = "";
+      if (feedbackFound) {
+        console.log(`Injecting feedback into step ${step.step_number} prompt`);
+        feedbackInjection = `IMPORTANT USER INSTRUCTION:\n${aggregatedFeedback.trim()}\nThis instruction was provided by the user and MUST be followed.\nIt overrides any default behavior for this step.\n\n`;
+      }
+
       const systemPrompt = `You are an automated step executor within the Foreman workforce architecture.
 You must perfectly execute the following step based strictly on the provided instructions.
 Enforce the QUALITY RULES. Ensure your output conforms precisely to the OUTPUT FORMAT.
 
-${run.agents.agent_memory ? `Agent memory from previous runs: ${run.agents.agent_memory}` : ""}
+${feedbackInjection}${run.agents.agent_memory ? `Agent memory from previous runs: ${run.agents.agent_memory}` : ""}
 
 CURRENT NOTEPAD STATE (Outputs from previous steps):
 ${JSON.stringify(globalState, null, 2)}
