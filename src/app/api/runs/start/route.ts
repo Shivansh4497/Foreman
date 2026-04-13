@@ -43,28 +43,34 @@ export async function POST(request: Request) {
     }
 
     // Create run record
-    const { data: run, error: runErr } = await serviceClient
+    const { data: newRun, error: runErr } = await serviceClient
       .from('agent_runs')
       .insert({
         agent_id: agent.id,
         user_id: user.id,
-        status: 'pending',
-        global_state: {},
+        status: 'running',
+        global_state: { current_step: 1, step_statuses: {} },
       })
       .select('id')
       .single();
 
-    if (runErr || !run) {
+    if (runErr || !newRun) {
       console.error(`[runs/start] Failed to create run: ${runErr?.message}`);
       return NextResponse.json({ error: `Failed to initialize agent run: ${runErr?.message}` }, { status: 500 });
     }
 
+    // Update agent status to running
+    await serviceClient
+      .from('agents')
+      .update({ status: 'running' })
+      .eq('id', agent_id);
+
     // Trigger background executed via Trigger.dev
     await tasks.trigger<typeof runAgentWorkflow>('run-agent-workflow', {
-      run_id: run.id,
+      run_id: newRun.id,
     });
 
-    return NextResponse.json({ success: true, run_id: run.id });
+    return NextResponse.json({ success: true, run_id: newRun.id });
 
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Unknown error';

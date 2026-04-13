@@ -273,138 +273,154 @@ export default function DashboardPage() {
               const requiresAttention = agent.status === 'waiting' || agent.status === 'waiting_for_human';
               
               return (
-                <div 
-                  key={agent.id} 
-                  onClick={() => setSelectedAgentId(agent.id)}
-                  style={{
-                    background: '#FFFFFF',
-                    border: requiresAttention ? '1.5px solid #C5D4F0' : '1px solid #D4CFC6',
-                    borderRadius: '12px',
-                    padding: '18px',
-                    cursor: 'pointer',
-                    transition: 'border-color 0.15s'
-                  }}
-                  onMouseEnter={(e) => { 
-                    if (!requiresAttention) e.currentTarget.style.borderColor = 'var(--text-tertiary)'; 
-                  }}
-                  onMouseLeave={(e) => { 
-                    if (!requiresAttention) e.currentTarget.style.borderColor = '#D4CFC6'; 
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '12px' }}>
-                    <div>
-                      <div style={{ fontSize: '14px', fontWeight: 600, color: '#1A1916', marginBottom: '2px' }}>
-                        {agent.name || 'Unnamed Agent'}
+                  <div 
+                    key={agent.id} 
+                    onClick={() => router.push(`/dashboard/conversation/${agent.id}`)}
+                    style={{
+                      background: '#FFFFFF',
+                      border: requiresAttention ? '1.5px solid #C5D4F0' : '1px solid #D4CFC6',
+                      borderRadius: '12px',
+                      padding: '18px',
+                      cursor: 'pointer',
+                      transition: 'border-color 0.15s'
+                    }}
+                    onMouseEnter={(e) => { 
+                      if (!requiresAttention) e.currentTarget.style.borderColor = 'var(--text-tertiary)'; 
+                    }}
+                    onMouseLeave={(e) => { 
+                      if (!requiresAttention) e.currentTarget.style.borderColor = '#D4CFC6'; 
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '12px' }}>
+                      <div>
+                        <div 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            router.push(`/dashboard/conversation/${agent.id}`);
+                          }}
+                          style={{ fontSize: '14px', fontWeight: 600, color: '#1A1916', marginBottom: '2px', cursor: 'pointer' }}
+                        >
+                          {agent.name || 'Unnamed Agent'}
+                        </div>
+                        <div style={{ fontSize: '11px', color: '#7A7770' }}>
+                          {agent.schedule || 'Manual trigger'}
+                        </div>
                       </div>
+                      {renderStatusBadge(agent.status)}
+                    </div>
+                    
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '7px', marginBottom: '14px' }}>
+                      <div style={{ background: '#F7F6F3', borderRadius: '7px', padding: '9px', textAlign: 'center' }}>
+                        <div style={{ fontSize: '14px', fontWeight: 600, color: '#1A1916' }}>{agent.total_runs}</div>
+                        <div style={{ fontSize: '10px', color: '#7A7770', marginTop: '1px' }}>Total runs</div>
+                      </div>
+                      <div style={{ background: '#F7F6F3', borderRadius: '7px', padding: '9px', textAlign: 'center' }}>
+                        <div style={{ fontSize: '14px', fontWeight: 600, color: '#1A1916' }}>
+                          {Math.round((agent.human_hours_per_run ?? 0) * (agent.total_runs ?? 0) * 10) / 10}h
+                        </div>
+                        <div style={{ fontSize: '10px', color: '#7A7770', marginTop: '1px' }}>Time saved</div>
+                      </div>
+                      <div style={{ background: '#F7F6F3', borderRadius: '7px', padding: '9px', textAlign: 'center' }}>
+                        <div style={{ fontSize: '14px', fontWeight: 600, color: '#1A1916' }}>$0.00</div>
+                        <div style={{ fontSize: '10px', color: '#7A7770', marginTop: '1px' }}>API cost</div>
+                      </div>
+                    </div>
+                    
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                       <div style={{ fontSize: '11px', color: '#7A7770' }}>
-                        {agent.schedule || 'Manual trigger'}
+                        {agent.status === 'running' ? 'Running now' : 
+                         requiresAttention ? `Checkpoint waiting — ${getTimeSince(agent.updated_at)}` 
+                         : `Last run: ${getTimeSince(agent.updated_at)}`}
                       </div>
-                    </div>
-                    {renderStatusBadge(agent.status)}
-                  </div>
-                  
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '7px', marginBottom: '14px' }}>
-                    <div style={{ background: '#F7F6F3', borderRadius: '7px', padding: '9px', textAlign: 'center' }}>
-                      <div style={{ fontSize: '14px', fontWeight: 600, color: '#1A1916' }}>{agent.total_runs}</div>
-                      <div style={{ fontSize: '10px', color: '#7A7770', marginTop: '1px' }}>Total runs</div>
-                    </div>
-                    <div style={{ background: '#F7F6F3', borderRadius: '7px', padding: '9px', textAlign: 'center' }}>
-                      <div style={{ fontSize: '14px', fontWeight: 600, color: '#1A1916' }}>
-                        {Math.round((agent.human_hours_per_run ?? 0) * (agent.total_runs ?? 0) * 10) / 10}h
-                      </div>
-                      <div style={{ fontSize: '10px', color: '#7A7770', marginTop: '1px' }}>Time saved</div>
-                    </div>
-                    <div style={{ background: '#F7F6F3', borderRadius: '7px', padding: '9px', textAlign: 'center' }}>
-                      <div style={{ fontSize: '14px', fontWeight: 600, color: '#1A1916' }}>$0.00</div>
-                      <div style={{ fontSize: '10px', color: '#7A7770', marginTop: '1px' }}>API cost</div>
-                    </div>
-                  </div>
-                  
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <div style={{ fontSize: '11px', color: '#7A7770' }}>
-                      {agent.status === 'running' ? 'Running now' : 
-                       requiresAttention ? `Checkpoint waiting — ${getTimeSince(agent.updated_at)}` 
-                       : `Last run: ${getTimeSince(agent.updated_at)}`}
-                    </div>
-                    <div style={{ display: 'flex', gap: '6px' }}>
-                      <button 
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setSelectedAgentId(agent.id);
-                        }}
-                        style={{
-                          padding: '5px 11px',
-                          fontSize: '11px',
-                          fontWeight: 500,
-                          color: '#4A4845',
-                          background: '#FFFFFF',
-                          border: '1px solid #D4CFC6',
-                          borderRadius: '6px',
-                          cursor: 'pointer',
-                        }}
-                      >
-                        Edit
-                      </button>
-                      
-                      {agent.status === 'running' ? (
+                      <div style={{ display: 'flex', gap: '6px' }}>
                         <button 
                           onClick={(e) => {
                             e.stopPropagation();
-                            // Find the latest run or redirect to a run view
-                            // Original code didn't have a specific run id here
+                            router.push(`/dashboard/conversation/${agent.id}`);
                           }}
                           style={{
-                          padding: '5px 11px', fontSize: '11px', fontWeight: 500, color: '#4A4845', background: '#FFFFFF', border: '1px solid #D4CFC6', borderRadius: '6px', cursor: 'pointer'
-                        }}>
-                          View run
-                        </button>
-                      ) : requiresAttention ? (
-                        <button 
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            router.push(`/dashboard/run/${agent.id}`); // Assuming this is how it works, though usually it's run id
-                            // Actually, I'll just let it propagate to card click for now or keep original behavior
+                            padding: '5px 11px',
+                            fontSize: '11px',
+                            fontWeight: 500,
+                            color: '#4A4845',
+                            background: '#FFFFFF',
+                            border: '1px solid #D4CFC6',
+                            borderRadius: '6px',
+                            cursor: 'pointer',
                           }}
-                          style={{
-                          padding: '5px 11px', fontSize: '11px', fontWeight: 500, color: '#FFFFFF', background: '#1A1916', border: 'none', borderRadius: '6px', cursor: 'pointer'
-                        }}>
-                          Review →
+                        >
+                          Chat
                         </button>
-                      ) : agent.status === 'paused' ? (
-                        <button style={{
-                          padding: '5px 11px', fontSize: '11px', fontWeight: 500, color: '#FFFFFF', background: '#1A1916', border: 'none', borderRadius: '6px', cursor: 'pointer'
-                        }}>
-                          Resume
-                        </button>
-                      ) : (
-                        <button 
-                          onClick={async (e) => {
-                            e.stopPropagation();
-                            const res = await fetch('/api/runs/start', {
-                              method: 'POST',
-                              headers: {
-                                'Content-Type': 'application/json',
-                                'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`
-                              },
-                              body: JSON.stringify({ agent_id: agent.id })
-                            });
-                            if (res.ok) {
-                              const { run_id } = await res.json();
-                              router.push(`/dashboard/run/${run_id}`);
-                            } else {
-                              const errData = await res.json();
-                              alert(`Failed to start run: ${errData.error || res.statusText}`);
-                            }
-                          }}
-                          style={{
-                          padding: '5px 11px', fontSize: '11px', fontWeight: 500, color: '#FFFFFF', background: '#1A1916', border: 'none', borderRadius: '6px', cursor: 'pointer'
-                        }}>
-                          Run now
-                        </button>
-                      )}
+                        
+                        {agent.status === 'running' ? (
+                          <button 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              // Find latest run logic would go here, usually handled via polling or conversation
+                              router.push(`/dashboard/conversation/${agent.id}`);
+                            }}
+                            style={{
+                            padding: '5px 11px', fontSize: '11px', fontWeight: 500, color: '#4A4845', background: '#FFFFFF', border: '1px solid #D4CFC6', borderRadius: '6px', cursor: 'pointer'
+                          }}>
+                            View run
+                          </button>
+                        ) : requiresAttention ? (
+                          <button 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              router.push(`/dashboard/conversation/${agent.id}`);
+                            }}
+                            style={{
+                            padding: '5px 11px', fontSize: '11px', fontWeight: 500, color: '#FFFFFF', background: '#1A1916', border: 'none', borderRadius: '6px', cursor: 'pointer'
+                          }}>
+                            Review →
+                          </button>
+                        ) : agent.status === 'paused' ? (
+                          <button 
+                            onClick={async (e) => {
+                              e.stopPropagation();
+                              const { data: { session } } = await supabase.auth.getSession();
+                              await fetch(`/api/agents/${agent.id}/pause`, {
+                                method: 'PATCH',
+                                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token}` },
+                                body: JSON.stringify({ status: 'active' })
+                              });
+                              window.location.reload();
+                            }}
+                            style={{
+                            padding: '5px 11px', fontSize: '11px', fontWeight: 500, color: '#FFFFFF', background: '#1A1916', border: 'none', borderRadius: '6px', cursor: 'pointer'
+                          }}>
+                            Resume
+                          </button>
+                        ) : (
+                          <button 
+                            onClick={async (e) => {
+                              e.stopPropagation();
+                              const { data: { session } } = await supabase.auth.getSession();
+                              const res = await fetch('/api/runs/start', {
+                                method: 'POST',
+                                headers: {
+                                  'Content-Type': 'application/json',
+                                  'Authorization': `Bearer ${session?.access_token}`
+                                },
+                                body: JSON.stringify({ agent_id: agent.id })
+                              });
+                              if (res.ok) {
+                                router.push(`/dashboard/conversation/${agent.id}`);
+                              } else {
+                                const errData = await res.json();
+                                alert(`Failed to start run: ${errData.error || res.statusText}`);
+                              }
+                            }}
+                            style={{
+                            padding: '5px 11px', fontSize: '11px', fontWeight: 500, color: '#FFFFFF', background: '#1A1916', border: 'none', borderRadius: '6px', cursor: 'pointer'
+                          }}>
+                            Run now
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </div>
-                </div>
               );
             })}
           </div>

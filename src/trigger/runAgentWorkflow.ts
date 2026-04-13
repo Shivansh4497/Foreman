@@ -269,6 +269,34 @@ Perform the objective now. Output ONLY what is requested in the OUT FORMAT. Do n
       await supabase.from('agents').update({ total_runs: (currentAgent.total_runs || 0) + 1 }).eq('id', run.agent_id);
     }
 
+    // Post final output to agent_conversations
+    try {
+      // Find the last step's output
+      const lastStepNumber = steps[steps.length - 1].step_number;
+      const finalOutput = globalState[`step_${lastStepNumber}_output`];
+      
+      if (finalOutput) {
+        // Fetch run number for metadata
+        const { count } = await supabase
+          .from('agent_runs')
+          .select('*', { count: 'exact', head: true })
+          .eq('agent_id', run.agent_id);
+        
+        await supabase.from('agent_conversations').insert({
+          agent_id: run.agent_id,
+          user_id: run.user_id,
+          run_id: run.id,
+          role: 'agent',
+          message_type: 'output',
+          content: String(finalOutput),
+          metadata: { run_number: count || 0 }
+        });
+        logger.info("Posted final output to agent_conversations");
+      }
+    } catch (err: any) {
+      logger.error("Failed to post output to agent_conversations", { error: err.message });
+    }
+
     logger.info(`Run successfully finished.`);
     return { success: true };
   }
