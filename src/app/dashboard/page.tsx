@@ -352,17 +352,7 @@ export default function DashboardPage() {
                           Chat
                         </button>
                         
-                          <button 
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              router.push(`/dashboard/conversation/${agent.id}`);
-                            }}
-                            style={{
-                            padding: '5px 11px', fontSize: '11px', fontWeight: 500, color: '#4A4845', background: '#FFFFFF', border: '1px solid #D4CFC6', borderRadius: '6px', cursor: 'pointer'
-                          }}>
-                            Chat
-                          </button>
-                        ) : requiresAttention ? (
+                        {requiresAttention ? (
                           <button 
                             onClick={(e) => {
                               e.stopPropagation();

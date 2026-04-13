@@ -1,7 +1,7 @@
 'use client';
 
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
-import { useEffect, useState, useRef, useMemo } from 'react';
+import { useEffect, useState, useRef, useMemo, Suspense } from 'react';
 import { supabase } from '@/lib/supabase';
 import ProfilePanel from '@/components/profile/ProfilePanel';
 
@@ -167,16 +167,16 @@ const RunCard = ({ message }: { message: Message }) => {
 
       {!isExpanded ? (
         <>
-          <div style={{ padding: '12px 16px', fontSize: '13px', color: '#4A4845', line-height: '1.6' }}>
+          <div style={{ padding: '12px 16px', fontSize: '13px', color: '#4A4845', lineHeight: '1.6' }}>
             {isFailed ? (
               <div style={{ fontSize: '12px', color: '#991B1B' }}>
                 Failed at step {metadata.steps?.find(s => s.status === 'failed')?.step_number || 'N'}: {metadata.error}
               </div>
             ) : (
-              metadata.output_preview ? (metadata.output_preview + (metadata.full_output?.length > 120 ? '...' : '')) : ''
+              metadata.output_preview ? (metadata.output_preview + ((metadata.full_output?.length ?? 0) > 120 ? '...' : '')) : ''
             )}
           </div>
-          <div style={{ display: 'flex', justify-content: 'flex-end', padding: '8px 16px' }}>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '8px 16px' }}>
             <button 
               onClick={() => setIsExpanded(true)}
               style={{ fontSize: '12px', fontWeight: 500, color: '#2E5BBA', background: 'none', border: 'none', cursor: 'pointer' }}
@@ -195,11 +195,11 @@ const RunCard = ({ message }: { message: Message }) => {
           </div>
           {/* Full Output */}
           {!isFailed && (
-            <div style={{ padding: '16px', background: '#F7F6F3', borderTop: '1px solid #D4CFC6', fontSize: '13px', color: '#1A1916', line-height: '1.7', white-space: 'pre-line' }}>
+            <div style={{ padding: '16px', background: '#F7F6F3', borderTop: '1px solid #D4CFC6', fontSize: '13px', color: '#1A1916', lineHeight: '1.7', whiteSpace: 'pre-line' }}>
               {metadata.full_output}
             </div>
           )}
-          <div style={{ display: 'flex', justify-content: 'flex-end', padding: '8px 16px' }}>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '8px 16px' }}>
             <button 
               onClick={() => setIsExpanded(false)}
               style={{ fontSize: '12px', fontWeight: 500, color: '#2E5BBA', background: 'none', border: 'none', cursor: 'pointer' }}
@@ -456,9 +456,9 @@ const MessageBubble = ({ message }: { message: Message }) => {
   );
 };
 
-// --- Main Page ---
+// --- Inner Page ---
 
-export default function AgentConversationPage() {
+function ConversationInner() {
   const { agentId } = useParams();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -704,5 +704,15 @@ export default function AgentConversationPage() {
         <ProfilePanel agentId={agentId as string} inline />
       </div>
     </div>
+  );
+}
+
+// --- Wrapper for Suspense ---
+
+export default function AgentConversationPage() {
+  return (
+    <Suspense fallback={<div style={{ height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#F7F6F3', color: '#7A7770', fontSize: '13px' }}>Loading conversation...</div>}>
+      <ConversationInner />
+    </Suspense>
   );
 }
