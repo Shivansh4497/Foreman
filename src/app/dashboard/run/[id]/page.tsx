@@ -233,8 +233,8 @@ export default function RunExecutionPage() {
           const today = new Date().toISOString().split('T')[0];
           const lines = agentData.agent_memory.split('\n');
           const filtered = lines
-            .filter(l => l.startsWith(`[${today}]`))
-            .map(l => l.replace(`[${today}]`, '').trim())
+            .filter((l: string) => l.startsWith(`[${today}]`))
+            .map((l: string) => l.replace(`[${today}]`, '').trim())
             .slice(0, 5);
           setAgentMemoryEntries(filtered);
         }
