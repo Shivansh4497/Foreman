@@ -16,8 +16,10 @@ export async function callLLM(opts: {
     'Claude 3 Haiku': 'claude-3-haiku-20240307',
     'Gemini 1.5 Pro': 'gemini-1.5-pro-latest',
     'Gemini 1.5 Flash': 'gemini-1.5-flash-latest',
-    'Llama 3': 'llama-3.3-70b-versatile',
-    'Mixtral 8x7b': 'mixtral-8x7b-32768',
+    'Llama 3.3 70B (Recommended)': 'llama-3.3-70b-versatile',
+    'Llama 3.1 8B': 'llama-3.1-8b-instant',
+    'Llama 3': 'llama-3.3-70b-versatile', // Fallback for old saved string
+    'Mixtral 8x7b': 'llama-3.1-8b-instant', // Redirection for decommissioned model
   };
   const apiModel = modelMapping[model] || model;
 
