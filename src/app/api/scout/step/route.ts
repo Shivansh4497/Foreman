@@ -93,13 +93,6 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ error: 'Parent agent not found or access denied' }, { status: 404 });
     }
 
-    if (agentRow.status !== 'draft') {
-      return NextResponse.json(
-        { error: 'Steps can only be edited on draft agents' },
-        { status: 409 }
-      );
-    }
-
     // 2. Build a sanitised update object containing only allowed fields.
     const sanitisedUpdates: Record<string, unknown> = {};
     for (const field of ALLOWED_STEP_FIELDS) {

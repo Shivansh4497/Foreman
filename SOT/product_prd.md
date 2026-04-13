@@ -2,9 +2,9 @@
 
 **Version:** 1.0.0
 **Status:** IN PROGRESS
-**Completion Status:** 50%
+**Completion Status:** 55%
 **Pending Next:** Feature 5 — Agent Memory & Instruction Updates
-**Last Sprint:** Feature 2, 3, 4, 9 — Setup & Scaffold (Built Outside SOP) — 2026-04-13
+**Last Sprint:** Sprint 2 — Agent Run View Output Rendering — 2026-04-13
 
 ---
 
@@ -278,7 +278,7 @@ User signs in with Google, selects their LLM provider, and securely stores their
 
 ### Feature 2 — Scout: Agent Creation via Conversation
 
-> **Status: COMPLETE — 100%** · Built outside SOP
+> **Status: COMPLETE — 100%** · Built outside SOP · Sprint closed: 2026-04-13
 
 User converses with Scout in plain English. Scout asks minimum questions, proposes a workflow, and the user hires the agent.
 
@@ -340,7 +340,7 @@ Overview of all hired agents with status, last run, next scheduled run, and key 
 
 ### Feature 4 — Agent Execution & Real-Time Progress
 
-> **Status: COMPLETE — 100%** · Built outside SOP
+> **Status: COMPLETE — 100%** · Built outside SOP · Run view output rendering fixed & verified in production · Sprint closed: 2026-04-13
 
 User triggers a manual run or scheduled run fires. User sees live step-by-step progress.
 

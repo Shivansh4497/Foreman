@@ -108,3 +108,30 @@ VERIFIED — deployed and confirmed working in production at foreman-green.verce
 Significant positive drift. SOT files have been updated to reflect the reality that Features 2, 3, 4, and 9 exist in code.
 
 ---
+
+## Sprint 2 — Agent Run View Output Rendering Sprint Log
+**Timestamp:** 2026-04-13T05:38:07Z
+**Sprint status:** COMPLETE
+
+### Agents
+| Agent | Status | Notes |
+|-------|--------|-------|
+| @architect | COMPLETE | — |
+| @builder (frontend) | COMPLETE | — |
+| @critic | COMPLETE WITH PATCHES APPLIED | — |
+
+### Files Mutated
+- `src/app/dashboard/run/[id]/page.tsx` — implemented context-aware output renderer; eliminated raw JSON blobs from agent run view
+- Output rendering now parses `topic_sources`, `post_drafts`, and `steps` arrays into clean human-readable formats (bold headers, bulleted lists, formatted paragraphs); technical metadata (URLs, relevance scores) strictly filtered
+
+### Critic Summary
+Critical patches: 0
+Non-critical observations: 0 (see full audit in session 0cb0c4b4-69d8-48b0-ab04-9e33ac657b87)
+
+### SOT Drift
+None detected.
+
+### Human Verification
+VERIFIED — output rendering confirmed working in production (foreman-green.vercel.app)
+
+---

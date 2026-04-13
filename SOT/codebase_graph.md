@@ -13,6 +13,7 @@ graph LR
     classDef comp fill:#F0EEE9,stroke:#D4CFC6,stroke-width:1px,color:#4A4845;
     classDef lib fill:#EAF5EE,stroke:#1A7A4A,stroke-width:1.5px,color:#1A1916;
     classDef prompt fill:#FEF3DC,stroke:#8A5C00,stroke-width:1px,color:#1A1916;
+    classDef trigger fill:#F2E6FF,stroke:#9B4BFF,stroke-width:1.5px,color:#1A1916;
 
     Root((Foreman)):::root
     
@@ -27,11 +28,16 @@ graph LR
     App_Pages --> Page_Dash[dashboard/page.tsx]:::page
     App_Pages --> Page_Create[create/page.tsx]:::page
     App_Pages --> Page_Review[review/page.tsx]:::page
+    
+    Dash_Routes[dashboard/]:::dir
+    Page_Dash -.-> Dash_Routes
+    Dash_Routes --> Dash_Run[run/`[id]`/page.tsx]:::page
+    Dash_Routes --> Dash_Set[settings/page.tsx]:::page
 
     App_API[API Routes]:::dir
     App --> App_API
     App_API --> API_Auth[auth/callback]:::api
-    App_API --> API_Keys[api/keys/save]:::api
+    App_API --> API_Keys[keys/save]:::api
 
     API_Scout[api/scout]:::dir
     App_API --> API_Scout
@@ -41,14 +47,36 @@ graph LR
     API_Scout --> API_S_Step[step]:::api
     API_Scout --> API_S_Hire[hire]:::api
 
+    API_Runs[api/runs]:::dir
+    App_API --> API_Runs
+    API_Runs --> API_R_Start[start]:::api
+    API_Runs --> API_R_Resume[resume]:::api
+
+    API_Set[api/settings]:::dir
+    App_API --> API_Set
+    API_Set --> API_Set_Acc[account]:::api
+    API_Set --> API_Set_Conf[config]:::api
+    API_Set --> API_Set_Usage[usage]:::api
+
     %% Components
     Comp[src/components]:::dir
     Root --> Comp
     Comp --> C_Auth[AuthGuard.tsx]:::comp
     Comp --> C_Side[Sidebar.tsx]:::comp
     Comp --> C_Nav[TopNav.tsx]:::comp
-    Comp --> C_Scout[scout/]:::comp
-    Comp --> C_Set[settings/]:::comp
+    
+    Comp_Scout[scout/]:::dir
+    Comp --> Comp_Scout
+    Comp_Scout --> CS_Blue[BlueprintPanel.tsx]:::comp
+    Comp_Scout --> CS_Chat[ScoutChatPanel.tsx]:::comp
+    Comp_Scout --> CS_Step[StepEditModal.tsx]:::comp
+
+    Comp_Set[settings/]:::dir
+    Comp --> Comp_Set
+    Comp_Set --> CSet_Acc[AccountTab.tsx]:::comp
+    Comp_Set --> CSet_Api[ApiKeyTab.tsx]:::comp
+    Comp_Set --> CSet_Bill[BillingTab.tsx]:::comp
+    Comp_Set --> CSet_Use[UsageTab.tsx]:::comp
 
     %% Lib
     Lib[src/lib]:::dir
@@ -56,13 +84,21 @@ graph LR
     Lib --> L_Supa[supabase.ts]:::lib
     Lib --> L_LLM[llm.ts]:::lib
     
-    Lib_Scout[scout/prompts]:::dir
+    Lib_Scout[scout/prompts/]:::dir
     Lib --> Lib_Scout
     Lib_Scout --> P_L1[layer1_intent...]:::prompt
     Lib_Scout --> P_L2[layer2_questions...]:::prompt
     Lib_Scout --> P_L3[layer3_blueprint...]:::prompt
     Lib_Scout --> P_L4[layer4_context...]:::prompt
     Lib_Scout --> P_L5[layer5_quality...]:::prompt
+    Lib_Scout --> P_Conv[scout_conversation...]:::prompt
+
+    %% Trigger.dev
+    Trig[src/trigger]:::dir
+    Root --> Trig
+    Trig --> T_Run[runAgentWorkflow.ts]:::trigger
+    Trig --> T_Ex[example.ts]:::trigger
+    Trig --> T_Dum[dummy.ts]:::trigger
 ```
 
 ## Database Schema Model (supabase/migrations)
@@ -75,8 +111,6 @@ erDiagram
     AGENTS ||--o{ AGENT_STEPS : contains
     AGENTS ||--o{ CONVERSATIONS : interacts_via
     AGENTS ||--o{ AGENT_RUNS : executes
-    
-    AGENT_RUNS ||--o{ CHECKPOINTS : suspends_at
 
     USERS {
         uuid id PK
@@ -118,10 +152,9 @@ erDiagram
     AGENT_RUNS {
         uuid id PK
         uuid agent_id FK
-        string status "running | completed | failed | waiting"
-        int current_step
-        jsonb global_state "Run state & outputs"
-        int input_tokens
-        int output_tokens
+        uuid user_id FK
+        int run_number
+        string status "pending | running | waiting_for_human | completed | failed"
+        jsonb global_state "Run state & checkpoints"
     }
 ```
