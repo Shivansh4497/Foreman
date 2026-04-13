@@ -476,22 +476,43 @@ function ConversationInner() {
   // Initial Fetch & Polling
   useEffect(() => {
     async function fetchData() {
-      const { data: agentData } = await supabase.from('agents').select('*').eq('id', agentId).single();
+      // 1. Fetch Agent
+      const { data: agentData, error: agentErr } = await supabase.from('agents').select('*').eq('id', agentId).single();
+      if (agentErr) console.error('Error fetching agent:', agentErr);
       if (agentData) setAgent(agentData);
 
-      const { data: msgData } = await supabase.from('agent_conversations')
+      // 2. Fetch Messages
+      const { data: msgData, error: msgErr } = await supabase.from('agent_conversations')
         .select('*')
         .eq('agent_id', agentId)
         .order('created_at', { ascending: true });
+      if (msgErr) console.error('Error fetching messages:', msgErr);
       if (msgData) {
         setMessages(msgData as Message[]);
+      }
+
+      // 3. Active Run Recovery (on initial load if not already set)
+      if (!activeRunId) {
+        const { data: activeRunData, error: activeRunErr } = await supabase
+          .from('agent_runs')
+          .select('id')
+          .eq('agent_id', agentId)
+          .in('status', ['running', 'waiting_for_human'])
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (activeRunErr) console.error('Error recovering active run:', activeRunErr);
+        if (activeRunData) {
+          setActiveRunId(activeRunData.id);
+        }
       }
     }
 
     fetchData();
     const interval = setInterval(fetchData, 3000);
     return () => clearInterval(interval);
-  }, [agentId]);
+  }, [agentId, activeRunId]);
 
   // Handle Autorun
   useEffect(() => {
