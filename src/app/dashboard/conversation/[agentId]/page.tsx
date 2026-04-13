@@ -95,6 +95,11 @@ const Badge = ({ status, pulse }: { status: string; pulse?: boolean }) => {
       color = '#8A5C00';
       label = 'Waiting';
       break;
+    case 'cancelled':
+      bg = '#F3F4F6';
+      color = '#4B5563';
+      label = 'Cancelled';
+      break;
   }
 
   return (
@@ -537,6 +542,8 @@ function ConversationInner() {
   const [inputValue, setInputValue] = useState('');
   const [isSending, setIsSending] = useState(false);
   const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
+  const [showRunConfirm, setShowRunConfirm] = useState(false);
+  const [isRestarting, setIsRestarting] = useState(false);
 
   const threadRef = useRef<HTMLDivElement>(null);
 
@@ -667,23 +674,30 @@ function ConversationInner() {
     setIsSending(false);
   };
 
-  const handleRunNow = async () => {
-    if (activeRunId) return;
+  const handleRunNow = async (force = false) => {
+    if (activeRunId && !force) return;
     
+    if (agent?.status === 'running' && !activeRunId && !force) {
+      setShowRunConfirm(true);
+      return;
+    }
+
     // Optimistic UI start
     setActiveRunId('starting');
+    setShowRunConfirm(false);
     
     try {
       const { data: { session } } = await supabase.auth.getSession();
       const res = await fetch('/api/runs/start', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token}` },
-        body: JSON.stringify({ agent_id: agentId })
+        body: JSON.stringify({ agent_id: agentId, force })
       });
+      const data = await res.json();
       if (res.ok) {
-        const { run_id } = await res.json();
-        setActiveRunId(run_id);
+        setActiveRunId(data.run_id);
       } else {
+        alert(data.error || 'Failed to start run');
         setActiveRunId(null);
       }
     } catch (e) { 
@@ -851,8 +865,60 @@ function ConversationInner() {
 
       {/* Profile Column */}
       <div style={{ height: '100vh', overflow: 'hidden' }}>
-        <ProfilePanel agentId={agentId as string} inline onRunNow={handleRunNow} />
+        <ProfilePanel agentId={agentId as string} inline onRunNow={() => handleRunNow()} />
       </div>
+
+      {/* Concurrency Modal */}
+      {showRunConfirm && (
+        <div style={{
+          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000,
+          backdropFilter: 'blur(4px)'
+        }}>
+          <div style={{
+            background: 'white', padding: '24px', borderRadius: '16px', maxWidth: '400px', width: '100%',
+            boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04)'
+          }}>
+            <h3 style={{ fontSize: '18px', fontWeight: 600, color: '#1A1916', marginBottom: '8px' }}>Agent is already active</h3>
+            <p style={{ fontSize: '14px', color: '#4A4845', lineHeight: 1.5, marginBottom: '24px' }}>
+              An agent run is currently executing. You can either continue viewing the existing run or terminate it to start a fresh one.
+            </p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <button 
+                onClick={() => {
+                  setShowRunConfirm(false);
+                  // Force a recovery poll
+                  window.dispatchEvent(new Event('sync-run'));
+                }}
+                style={{
+                  padding: '12px', background: '#F7F6F3', border: '1px solid #D4CFC6', borderRadius: '8px',
+                  fontSize: '13px', fontWeight: 600, color: '#1A1916', cursor: 'pointer'
+                }}
+              >
+                Let old agent run
+              </button>
+              <button 
+                onClick={() => handleRunNow(true)}
+                style={{
+                  padding: '12px', background: '#EF4444', border: 'none', borderRadius: '8px',
+                  fontSize: '13px', fontWeight: 600, color: '#FFFFFF', cursor: 'pointer'
+                }}
+              >
+                Kill last run and start new
+              </button>
+              <button 
+                onClick={() => setShowRunConfirm(false)}
+                style={{
+                  padding: '8px', background: 'none', border: 'none',
+                  fontSize: '12px', fontWeight: 500, color: '#7A7770', cursor: 'pointer'
+                }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

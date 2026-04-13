@@ -24,7 +24,7 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
-    const { agent_id } = body;
+    const { agent_id, force } = body;
 
     if (!agent_id) {
       return NextResponse.json({ error: 'agent_id is required' }, { status: 400 });
@@ -42,9 +42,46 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Agent not found or access denied' }, { status: 404 });
     }
 
-    // NEW: Concurrency Check - Don't start if already running
-    if (agent.status === 'running') {
-      // Small check to see if there's actually a recent run that just started
+    // NEW: Handle Force Cancel
+    if (force) {
+      const { data: activeRuns } = await serviceClient
+        .from('agent_runs')
+        .select('id, trigger_task_id')
+        .eq('agent_id', agent_id)
+        .in('status', ['running', 'waiting_for_human']);
+
+      if (activeRuns && activeRuns.length > 0) {
+        for (const run of activeRuns) {
+          // 1. Cancel on Trigger.dev if we have a task ID
+          if (run.trigger_task_id) {
+            try {
+              await tasks.cancel(run.trigger_task_id);
+              console.log(`[runs/start] Cancelled Trigger.dev task: ${run.trigger_task_id}`);
+            } catch (err) {
+              console.error(`[runs/start] Failed to cancel Trigger.dev task: ${err}`);
+            }
+          }
+
+          // 2. Mark DB as cancelled
+          await serviceClient
+            .from('agent_runs')
+            .update({ status: 'cancelled' })
+            .eq('id', run.id);
+
+          // 3. Post cancellation card to chat
+          await serviceClient.from('agent_conversations').insert({
+            agent_id: agent_id,
+            user_id: user.id,
+            run_id: run.id,
+            role: 'agent',
+            message_type: 'run_card',
+            content: 'Run cancelled by user',
+            metadata: { status: 'cancelled', run_number: 0 }
+          });
+        }
+      }
+    } else if (agent.status === 'running') {
+      // Concurrency Check (Non-force)
       const { data: existingRun } = await serviceClient
         .from('agent_runs')
         .select('id, created_at')
@@ -82,18 +119,23 @@ export async function POST(request: Request) {
 
     // Trigger background executed via Trigger.dev
     try {
-      await tasks.trigger<typeof runAgentWorkflow>('run-agent-workflow', {
+      const trigger = await tasks.trigger<typeof runAgentWorkflow>('run-agent-workflow', {
         run_id: newRun.id,
       });
 
-      // Update agent status to running ONLY after trigger success
+      // Update agent status AND store the task ID
       await serviceClient
         .from('agents')
         .update({ status: 'running' })
         .eq('id', agent_id);
+
+      await serviceClient
+        .from('agent_runs')
+        .update({ trigger_task_id: trigger.id })
+        .eq('id', newRun.id);
+
     } catch (triggerErr: any) {
       console.error(`[runs/start] Trigger.dev failure: ${triggerErr.message}`);
-      // Revert run record since it didn't actually start
       await serviceClient.from('agent_runs').delete().eq('id', newRun.id);
       return NextResponse.json({ 
         error: `Background worker failed to start. Details: ${triggerErr.message}` 
