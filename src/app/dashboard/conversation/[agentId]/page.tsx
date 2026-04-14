@@ -36,6 +36,7 @@ interface RunMetadata {
   error?: string;
   steps: Step[];
   cancelled_by_user?: boolean;
+  user_feedback?: string;
 }
 
 interface Message {
@@ -53,9 +54,11 @@ interface Message {
 interface AgentRun {
   id: string;
   agent_id: string;
+  run_number?: number;
   status: string;
   global_state: any;
   created_at: string;
+  completed_at?: string;
 }
 
 // --- Components ---
@@ -105,24 +108,12 @@ const Badge = ({ status, pulse }: { status: string; pulse?: boolean }) => {
 
   return (
     <div style={{
-      display: 'inline-flex',
-      alignItems: 'center',
-      gap: '5px',
-      padding: '3px 9px',
-      borderRadius: '100px',
-      fontSize: '11px',
-      fontWeight: 600,
-      background: bg,
-      color: color,
+      display: 'inline-flex', alignItems: 'center', gap: '5px',
+      padding: '3px 9px', borderRadius: '100px',
+      fontSize: '11px', fontWeight: 600, background: bg, color,
     }}>
       {pulse && (
-        <div style={{
-          width: '5px',
-          height: '5px',
-          borderRadius: '50%',
-          background: color,
-          animation: 'pulse 1.2s ease-in-out infinite',
-        }} />
+        <div style={{ width: '5px', height: '5px', borderRadius: '50%', background: color, animation: 'pulse 1.2s ease-in-out infinite' }} />
       )}
       {label}
     </div>
@@ -131,9 +122,7 @@ const Badge = ({ status, pulse }: { status: string; pulse?: boolean }) => {
 
 const getStepBadge = (stepType: string) => {
   const t = stepType?.toLowerCase() || '';
-  if (t === 'manual_review' || t === 'review') {
-    return { label: 'REVIEW', bg: '#FEF3DC', color: '#8A5C00' };
-  }
+  if (t === 'manual_review' || t === 'review') return { label: 'REVIEW', bg: '#FEF3DC', color: '#8A5C00' };
   return { label: 'AUTO', bg: '#EAF5EE', color: '#1A7A4A' };
 };
 
@@ -142,107 +131,16 @@ const formatTime = (iso: string) => {
   return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
 };
 
-const RunCard = ({ message, isExpanded, onToggle }: { message: Message; isExpanded: boolean; onToggle: () => void }) => {
-  const metadata = message.metadata;
-  if (!metadata) return null;
-
-  const date = new Date(message.created_at);
-  const formattedDate = date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
-  const timeStr = date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
-  const HeaderStr = `Run #${metadata.run_number} · ${formattedDate} · ${timeStr}`;
-  
-  if (metadata.cancelled_by_user) {
-    return (
-      <div style={{
-        padding: '8px 16px',
-        margin: '8px 0 16px',
-        fontSize: '12px',
-        color: '#7A7770',
-        display: 'flex',
-        alignItems: 'center',
-        gap: '8px',
-        fontStyle: 'italic',
-        background: '#F7F6F3',
-        borderRadius: '8px',
-        alignSelf: 'flex-start',
-        border: '1px solid #EAE9E4'
-      }}>
-        <div style={{ width: '6px', height: '6px', background: '#D4CFC6', borderRadius: '50%' }} />
-        Run cancelled by user · {timeStr}
-      </div>
-    );
-  }
-
-  const headerStr = HeaderStr;
-
-  return (
-    <div style={{
-      background: '#FFFFFF',
-      border: '1px solid #D4CFC6',
-      borderRadius: '12px',
-      overflow: 'hidden',
-      marginBottom: '16px',
-      maxWidth: '600px',
-      alignSelf: 'flex-start',
-      width: '100%',
-    }}>
-      {/* Header */}
-      <div style={{
-        padding: '11px 16px',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        borderBottom: '1px solid #D4CFC6',
-      }}>
-        <div style={{ fontSize: '12px', fontWeight: 600, color: '#1A1916' }}>
-          {headerStr}
-        </div>
-        <Badge status={metadata.status} />
-      </div>
-
-      {!isExpanded ? (
-        <>
-          {metadata.output_preview && (
-            <div style={{ padding: '10px 16px', fontSize: '13px', color: '#4A4845', lineHeight: '1.6' }}>
-              {metadata.output_preview.substring(0, 120)}{metadata.output_preview.length > 120 ? '...' : ''}
-            </div>
-          )}
-          <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '6px 16px 10px' }}>
-            <button 
-              onClick={onToggle}
-              style={{ fontSize: '12px', fontWeight: 500, color: '#2E5BBA', background: 'none', border: 'none', cursor: 'pointer', fontFamily: "'DM Sans', sans-serif" }}
-            >
-              Know more ↓
-            </button>
-          </div>
-        </>
-      ) : (
-        <div style={{ animation: 'fadeIn 0.3s ease' }}>
-          <div style={{ padding: '12px 16px', borderBottom: '1px solid #D4CFC6' }}>
-            {metadata.steps?.map((step, idx) => (
-              <StepRow key={idx} step={step} isLast={idx === metadata.steps.length - 1} />
-            ))}
-          </div>
-          <div style={{ padding: '14px 16px', background: '#F7F6F3', fontSize: '13px', color: '#1A1916', lineHeight: '1.7', whiteSpace: 'pre-line' }}>
-            {metadata.full_output}
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '6px 16px 10px' }}>
-            <button 
-              onClick={onToggle}
-              style={{ fontSize: '12px', fontWeight: 500, color: '#2E5BBA', background: 'none', border: 'none', cursor: 'pointer', fontFamily: "'DM Sans', sans-serif" }}
-            >
-              Close ↑
-            </button>
-          </div>
-        </div>
-      )}
-    </div>
-  );
+const formatDuration = (seconds: number) => {
+  if (seconds < 60) return `${seconds}s`;
+  return `${Math.floor(seconds / 60)}m ${seconds % 60}s`;
 };
+
+// --- StepRow (used in expanded view) ---
 
 const StepRow = ({ step, isLast }: { step: Step; isLast: boolean }) => {
   const [isOpen, setIsOpen] = useState(false);
-  
+
   const getIcon = () => {
     switch (step.status) {
       case 'completed': return { char: '✓', bg: '#EAF5EE', color: '#1A7A4A' };
@@ -254,62 +152,31 @@ const StepRow = ({ step, isLast }: { step: Step; isLast: boolean }) => {
     }
   };
 
-  const icon = getIcon();
+  const icon = getIcon() as any;
   const badge = getStepBadge(step.step_type);
 
   return (
     <div style={{ borderBottom: isLast ? 'none' : '1px solid #F0EEE9' }}>
-      <div 
+      <div
         onClick={() => step.output && setIsOpen(!isOpen)}
         style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '8px 0', cursor: step.output ? 'pointer' : 'default' }}
       >
         <div style={{
-          width: '20px',
-          height: '20px',
-          borderRadius: '50%',
-          background: icon.bg,
-          color: icon.color,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          fontSize: '11px',
-          fontWeight: 600,
-          border: icon.spinner ? '2px solid #2E5BBA' : 'none',
-          position: 'relative'
+          width: '20px', height: '20px', borderRadius: '50%', background: icon.bg, color: icon.color,
+          display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px', fontWeight: 600,
+          border: icon.spinner ? '2px solid #2E5BBA' : 'none', flexShrink: 0
         }}>
           {icon.spinner ? (
-            <div style={{
-              width: '14px', height: '14px', border: '2px solid rgba(46, 91, 186, 0.2)',
-              borderTopColor: '#2E5BBA', borderRadius: '50%', animation: 'spin 1s linear infinite'
-            }} />
+            <div style={{ width: '14px', height: '14px', border: '2px solid rgba(46,91,186,0.2)', borderTopColor: '#2E5BBA', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
           ) : icon.char}
         </div>
         <div style={{ fontSize: '13px', fontWeight: 500, color: '#1A1916', flex: 1 }}>{step.name}</div>
-        <div style={{
-          background: badge.bg,
-          color: badge.color,
-          fontSize: '10px',
-          fontWeight: 600,
-          padding: '2px 7px',
-          borderRadius: '4px',
-          textTransform: 'uppercase',
-          letterSpacing: '0.3px'
-        }}>
+        <div style={{ background: badge.bg, color: badge.color, fontSize: '10px', fontWeight: 600, padding: '2px 7px', borderRadius: '4px', textTransform: 'uppercase', letterSpacing: '0.3px' }}>
           {badge.label}
         </div>
       </div>
       {isOpen && step.output && (
-        <div style={{
-          background: '#F7F6F3',
-          borderRadius: '6px',
-          padding: '8px 10px',
-          margin: '4px 0 4px 30px',
-          fontSize: '12px',
-          color: '#4A4845',
-          lineHeight: 1.5,
-          maxHeight: '120px',
-          overflow: 'hidden'
-        }}>
+        <div style={{ background: '#F7F6F3', borderRadius: '6px', padding: '8px 10px', margin: '4px 0 4px 30px', fontSize: '12px', color: '#4A4845', lineHeight: 1.5, maxHeight: '120px', overflow: 'auto' }}>
           {step.output}
         </div>
       )}
@@ -317,31 +184,45 @@ const StepRow = ({ step, isLast }: { step: Step; isLast: boolean }) => {
   );
 };
 
-const LiveRunWidget = ({ runId, agentId, onComplete }: { runId: string, agentId: string, onComplete: () => void }) => {
+// --- LiveRunWidget: two-state inline chat card ---
+
+const LiveRunWidget = ({ runId, agentId, onComplete }: { runId: string; agentId: string; onComplete: () => void }) => {
   const [run, setRun] = useState<AgentRun | null>(null);
   const [steps, setSteps] = useState<any[]>([]);
   const [resumeLoading, setResumeLoading] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(false); // for completed compressed → expanded toggle
+  const [checkpointInput, setCheckpointInput] = useState('');
+  const completedRef = useRef(false);
 
+  // Polling
   useEffect(() => {
+    if (runId === 'starting') return;
+
     async function poll() {
-      if (runId === 'starting') return;
-      
       const { data: runData } = await supabase.from('agent_runs').select('*').eq('id', runId).single();
-      if (runData) {
-        setRun(runData);
-      }
+      if (runData) setRun(runData);
 
       const { data: stepsData } = await supabase.from('agent_steps')
-        .select('*')
-        .eq('agent_id', agentId)
-        .order('step_number', { ascending: true });
+        .select('*').eq('agent_id', agentId).order('step_number', { ascending: true });
       if (stepsData) setSteps(stepsData);
     }
 
     poll();
     const interval = setInterval(poll, 3000);
     return () => clearInterval(interval);
-  }, [runId, agentId, onComplete]);
+  }, [runId, agentId]);
+
+  // Wire onComplete: fire when run reaches a terminal state
+  useEffect(() => {
+    if (!run) return;
+    const terminal = ['completed', 'failed', 'cancelled'];
+    if (terminal.includes(run.status) && !completedRef.current) {
+      completedRef.current = true;
+      // Delay: let backend update agents.status first, then clear the header badge
+      const t = setTimeout(() => onComplete(), 2000);
+      return () => clearTimeout(t);
+    }
+  }, [run?.status, onComplete]);
 
   const handleResume = async (feedback?: string) => {
     setResumeLoading(true);
@@ -352,131 +233,256 @@ const LiveRunWidget = ({ runId, agentId, onComplete }: { runId: string, agentId:
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token}` },
         body: JSON.stringify({ run_id: runId, human_feedback: feedback })
       });
+      setCheckpointInput('');
     } catch (e) { console.error(e); }
     setResumeLoading(false);
   };
 
-  if (!run) {
+  const isTerminal = run && ['completed', 'failed', 'cancelled'].includes(run.status);
+  const stepStatuses = run?.global_state?.step_statuses || {};
+
+  // Extract user feedback from global_state (stored by worker at checkpoint)
+  const userFeedback = run?.global_state?.human_feedback_step
+    ? Object.entries(run.global_state)
+        .filter(([k]) => k.startsWith('human_feedback_step_'))
+        .map(([, v]) => v as string)
+        .filter(Boolean)
+        .join(', ')
+    : null;
+
+  // Final output: last step's output
+  const lastStepOutput = steps.length > 0
+    ? run?.global_state?.[`step_${steps[steps.length - 1]?.step_number}_output`] || null
+    : null;
+
+  // Duration
+  const durationSecs = run?.created_at && run?.completed_at
+    ? Math.floor((new Date(run.completed_at).getTime() - new Date(run.created_at).getTime()) / 1000)
+    : null;
+
+  // ── Loading / Starting state ──
+  if (!run || runId === 'starting') {
     return (
-      <div id="live-run-widget" style={{
-        background: '#FFFFFF',
-        border: '1px solid #D4CFC6',
-        borderRadius: '12px',
-        overflow: 'hidden',
-        marginBottom: '12px',
-        maxWidth: '640px',
-        alignSelf: 'flex-start',
-        width: '100%',
+      <div style={{
+        background: '#FFFFFF', border: '1px solid #D4CFC6', borderRadius: '12px', overflow: 'hidden',
+        marginBottom: '16px', maxWidth: '600px', alignSelf: 'flex-start', width: '100%',
         animation: 'fadeInUp 0.25s ease'
       }}>
-        <div style={{
-          padding: '12px 16px',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          background: '#F7F6F3',
-        }}>
+        <div style={{ padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#F7F6F3' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <div className="spinner-mini" />
             <div style={{ fontSize: '12px', fontWeight: 600, color: '#1A1916' }}>Starting agent...</div>
           </div>
           <Badge status="running" pulse />
         </div>
-        <div style={{ padding: '24px 16px', textAlign: 'center', fontSize: '13px', color: '#7A7770' }}>
+        <div style={{ padding: '20px 16px', textAlign: 'center', fontSize: '13px', color: '#7A7770' }}>
           Preparing workflow and initializing steps...
         </div>
       </div>
     );
   }
 
-  const stepStatuses = run.global_state?.step_statuses || {};
+  // ── COMPLETED STATE: compressed card (default) or expanded ──
+  if (isTerminal) {
+    const headerBg = run.status === 'failed' ? '#FFF0F0' : '#F0FAF4';
+    const headerColor = run.status === 'failed' ? '#991B1B' : '#1A7A4A';
+    const headerText = run.status === 'completed' ? 'Run completed' : run.status === 'failed' ? 'Run failed' : 'Run cancelled';
+
+    return (
+      <div style={{
+        background: '#FFFFFF', border: '1px solid #D4CFC6', borderRadius: '12px', overflow: 'hidden',
+        marginBottom: '16px', maxWidth: '600px', alignSelf: 'flex-start', width: '100%',
+        animation: 'fadeInUp 0.2s ease'
+      }}>
+        {/* Header — always visible */}
+        <div
+          onClick={() => setIsExpanded(e => !e)}
+          style={{
+            padding: '11px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            background: headerBg, cursor: 'pointer', borderBottom: isExpanded ? '1px solid #D4CFC6' : 'none'
+          }}
+        >
+          <div style={{ fontSize: '12px', fontWeight: 600, color: headerColor }}>{headerText}</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            {durationSecs !== null && (
+              <span style={{ fontSize: '11px', color: '#7A7770' }}>{formatDuration(durationSecs)}</span>
+            )}
+            <Badge status={run.status} />
+            <span style={{ fontSize: '11px', color: '#7A7770' }}>{isExpanded ? '↑' : '↓'}</span>
+          </div>
+        </div>
+
+        {!isExpanded ? (
+          // ── Compressed body: user feedback + final output preview ──
+          <div>
+            {userFeedback && (
+              <div style={{ padding: '10px 16px 0', display: 'flex', gap: '8px', alignItems: 'flex-start' }}>
+                <div style={{ fontSize: '11px', fontWeight: 600, color: '#7A7770', paddingTop: '1px', flexShrink: 0 }}>You said</div>
+                <div style={{
+                  background: '#F0EEE9', border: '1px solid #D4CFC6', borderRadius: '6px',
+                  padding: '5px 10px', fontSize: '12px', color: '#4A4845', fontStyle: 'italic', flex: 1
+                }}>
+                  "{userFeedback}"
+                </div>
+              </div>
+            )}
+            {lastStepOutput && (
+              <div style={{ padding: '10px 16px', fontSize: '13px', color: '#4A4845', lineHeight: 1.6 }}>
+                {String(lastStepOutput).substring(0, 180)}{String(lastStepOutput).length > 180 ? '...' : ''}
+              </div>
+            )}
+            {!lastStepOutput && run.status === 'failed' && (
+              <div style={{ padding: '10px 16px', fontSize: '13px', color: '#991B1B', lineHeight: 1.6 }}>
+                {run.global_state?.error || 'Run failed unexpectedly.'}
+              </div>
+            )}
+            <div style={{ padding: '4px 16px 10px', display: 'flex', justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => setIsExpanded(true)}
+                style={{ fontSize: '12px', fontWeight: 500, color: '#2E5BBA', background: 'none', border: 'none', cursor: 'pointer' }}
+              >
+                Show full run ↓
+              </button>
+            </div>
+          </div>
+        ) : (
+          // ── Expanded body: full step list + outputs ──
+          <div style={{ animation: 'fadeIn 0.2s ease' }}>
+            {userFeedback && (
+              <div style={{ padding: '10px 16px 0', display: 'flex', gap: '8px', alignItems: 'flex-start' }}>
+                <div style={{ fontSize: '11px', fontWeight: 600, color: '#7A7770', paddingTop: '1px', flexShrink: 0 }}>You said</div>
+                <div style={{
+                  background: '#F0EEE9', border: '1px solid #D4CFC6', borderRadius: '6px',
+                  padding: '5px 10px', fontSize: '12px', color: '#4A4845', fontStyle: 'italic', flex: 1
+                }}>
+                  "{userFeedback}"
+                </div>
+              </div>
+            )}
+            <div style={{ padding: '12px 16px', borderBottom: '1px solid #F0EEE9' }}>
+              {steps.map((s, idx) => (
+                <StepRow
+                  key={idx}
+                  step={{
+                    step_number: s.step_number,
+                    name: s.name || s.objective?.split('.')[0] || `Step ${s.step_number}`,
+                    step_type: s.step_type,
+                    status: stepStatuses[s.step_number.toString()] || 'completed',
+                    output: run.global_state?.[`step_${s.step_number}_output`] || null
+                  }}
+                  isLast={idx === steps.length - 1}
+                />
+              ))}
+            </div>
+            {lastStepOutput && (
+              <div style={{ padding: '12px 16px', background: '#FAFAF8', fontSize: '13px', color: '#1A1916', lineHeight: 1.7, whiteSpace: 'pre-line', borderBottom: '1px solid #F0EEE9' }}>
+                {lastStepOutput}
+              </div>
+            )}
+            <div style={{ padding: '6px 16px 10px', display: 'flex', justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => setIsExpanded(false)}
+                style={{ fontSize: '12px', fontWeight: 500, color: '#2E5BBA', background: 'none', border: 'none', cursor: 'pointer' }}
+              >
+                Collapse ↑
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // ── ACTIVE STATE: live expanded widget ──
+  const isWaiting = run.status === 'waiting_for_human';
 
   return (
-    <div id="live-run-widget" style={{
-      background: '#FFFFFF',
-      border: '1px solid #D4CFC6',
-      borderRadius: '12px',
-      overflow: 'hidden',
-      marginBottom: '12px',
-      maxWidth: '640px',
-      alignSelf: 'flex-start',
-      width: '100%',
-      animation: 'fadeInUp 0.25s ease'
+    <div style={{
+      background: '#FFFFFF', border: `1px solid ${isWaiting ? '#E8D5A3' : '#D4CFC6'}`,
+      borderRadius: '12px', overflow: 'hidden', marginBottom: '16px',
+      maxWidth: '600px', alignSelf: 'flex-start', width: '100%', animation: 'fadeInUp 0.25s ease'
     }}>
+      {/* Active Header */}
       <div style={{
-        padding: '12px 16px',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
+        padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         borderBottom: '1px solid #D4CFC6',
-        background: run.status === 'failed' ? '#FEE2E2' : run.status === 'waiting_for_human' ? '#FEF8EC' : 'transparent',
+        background: isWaiting ? '#FEF8EC' : run.status === 'failed' ? '#FFF0F0' : 'transparent',
       }}>
-        <div style={{ fontSize: '12px', fontWeight: 600, color: run.status === 'waiting_for_human' ? '#8A5C00' : '#1A1916' }}>
-          {run.status === 'completed' ? 'Run finished' : run.status === 'failed' ? 'Run failed' : run.status === 'waiting_for_human' ? '⏸ Waiting for your input' : 'Agent running...'}
+        <div style={{ fontSize: '12px', fontWeight: 600, color: isWaiting ? '#8A5C00' : '#1A1916' }}>
+          {isWaiting ? '⏸ Waiting for your input' : 'Agent running...'}
         </div>
-        <Badge status={run.status === 'completed' ? 'completed' : run.status === 'failed' ? 'failed' : run.status === 'waiting_for_human' ? 'waiting_for_human' : 'running'} pulse={run.status === 'running' || run.status === 'waiting_for_human'} />
+        <Badge
+          status={isWaiting ? 'waiting_for_human' : 'running'}
+          pulse={true}
+        />
       </div>
 
+      {/* Step List */}
       <div style={{ padding: '12px 16px' }}>
         {steps.map((s, idx) => {
           const status = stepStatuses[s.step_number.toString()] || 'pending';
           const isCurrent = status === 'waiting_for_human';
-          
+
           return (
             <div key={idx}>
-              <StepRow step={{
-                step_number: s.step_number,
-                name: s.name || s.objective.split('.')[0],
-                step_type: s.step_type,
-                status: status,
-                output: run.global_state?.[`step_${s.step_number}_output`] || null
-              }} isLast={idx === steps.length - 1} />
-              
+              <StepRow
+                step={{
+                  step_number: s.step_number,
+                  name: s.name || s.objective?.split('.')[0] || `Step ${s.step_number}`,
+                  step_type: s.step_type,
+                  status,
+                  output: run.global_state?.[`step_${s.step_number}_output`] || null
+                }}
+                isLast={idx === steps.length - 1 && !isCurrent}
+              />
+
+              {/* Checkpoint UI — inline below the waiting step */}
               {isCurrent && (
                 <div style={{
-                  background: '#FFFFFF',
-                  border: '1px solid #C5D4F0',
-                  borderRadius: '8px',
-                  padding: '12px',
-                  margin: '8px 0 8px 30px',
-                  animation: 'fadeIn 0.2s ease'
+                  background: '#FFFBF2', border: '1px solid #E8D5A3', borderRadius: '8px',
+                  padding: '12px', margin: '8px 0 8px 30px', animation: 'fadeIn 0.2s ease'
                 }}>
-                  <div style={{ fontSize: '12px', fontWeight: 600, color: '#2E5BBA', marginBottom: '10px' }}>Your input is needed</div>
-                  <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
+                  <div style={{ fontSize: '12px', fontWeight: 600, color: '#8A5C00', marginBottom: '10px' }}>
+                    Your input is needed
+                  </div>
+                  <div style={{ display: 'flex', gap: '8px', marginBottom: '10px', flexWrap: 'wrap' }}>
                     {['Looks good, proceed', 'Revise the tone'].map(pill => (
-                      <button 
+                      <button
                         key={pill}
                         disabled={resumeLoading}
                         onClick={() => handleResume(pill === 'Looks good, proceed' ? undefined : pill)}
                         style={{
                           padding: '6px 14px', borderRadius: '100px', fontSize: '12px',
-                          background: '#F7F6F3', border: '1px solid #D4CFC6', color: '#4A4845',
-                          cursor: 'pointer', transition: 'all 0.15s'
+                          background: '#FEF3DC', border: '1px solid #E8D5A3', color: '#8A5C00',
+                          cursor: 'pointer', transition: 'all 0.15s', fontFamily: 'inherit'
                         }}
-                        onMouseEnter={e => { e.currentTarget.style.borderColor = '#2E5BBA'; e.currentTarget.style.color = '#2E5BBA'; }}
-                        onMouseLeave={e => { e.currentTarget.style.borderColor = '#D4CFC6'; e.currentTarget.style.color = '#4A4845'; }}
+                        onMouseEnter={e => { e.currentTarget.style.background = '#F5E6C0'; }}
+                        onMouseLeave={e => { e.currentTarget.style.background = '#FEF3DC'; }}
                       >
                         {pill}
                       </button>
                     ))}
                   </div>
                   <div style={{ display: 'flex', gap: '8px' }}>
-                    <textarea 
-                      id="checkpoint-input"
+                    <textarea
+                      value={checkpointInput}
+                      onChange={e => setCheckpointInput(e.target.value)}
                       placeholder="Type instructions..."
                       style={{
-                        flex: 1, height: '36px', padding: '8px 12px', border: '1px solid #D4CFC6', borderRadius: '8px',
-                        fontSize: '12px', fontFamily: 'inherit', resize: 'none'
+                        flex: 1, height: '36px', padding: '8px 12px', border: '1px solid #E8D5A3',
+                        borderRadius: '8px', fontSize: '12px', fontFamily: 'inherit', resize: 'none',
+                        background: '#FFFBF2'
                       }}
                     />
-                    <button 
-                      onClick={() => {
-                        const val = (document.getElementById('checkpoint-input') as HTMLTextAreaElement).value;
-                        handleResume(val);
+                    <button
+                      disabled={resumeLoading}
+                      onClick={() => handleResume(checkpointInput || undefined)}
+                      style={{
+                        background: '#1A1916', color: 'white', border: 'none', borderRadius: '8px',
+                        padding: '0 16px', fontSize: '12px', cursor: 'pointer', fontFamily: 'inherit'
                       }}
-                      style={{ background: '#1A1916', color: 'white', border: 'none', borderRadius: '8px', padding: '0 16px', fontSize: '12px', cursor: 'pointer' }}
                     >
-                      Send
+                      {resumeLoading ? '...' : 'Send'}
                     </button>
                   </div>
                 </div>
@@ -484,19 +490,145 @@ const LiveRunWidget = ({ runId, agentId, onComplete }: { runId: string, agentId:
             </div>
           );
         })}
+        {steps.length === 0 && (
+          <div style={{ padding: '12px 0', fontSize: '13px', color: '#7A7770', textAlign: 'center' }}>
+            Loading steps...
+          </div>
+        )}
       </div>
     </div>
   );
 };
 
+// --- Historical RunCard (for agent_conversations run_card messages) ---
+// Uses same compressed/expanded design as LiveRunWidget completed state
+
+const RunCard = ({ message, isExpanded, onToggle }: { message: Message; isExpanded: boolean; onToggle: () => void }) => {
+  const metadata = message.metadata;
+  if (!metadata) return null;
+
+  const timeStr = formatTime(message.created_at);
+
+  if (metadata.cancelled_by_user) {
+    return (
+      <div style={{
+        padding: '8px 16px', margin: '8px 0 4px', fontSize: '12px', color: '#7A7770',
+        display: 'flex', alignItems: 'center', gap: '8px', fontStyle: 'italic',
+        background: '#F7F6F3', borderRadius: '8px', alignSelf: 'flex-start', border: '1px solid #EAE9E4'
+      }}>
+        <div style={{ width: '6px', height: '6px', background: '#D4CFC6', borderRadius: '50%' }} />
+        Run cancelled by user · {timeStr}
+      </div>
+    );
+  }
+
+  const headerBg = metadata.status === 'failed' ? '#FFF0F0' : '#F0FAF4';
+  const headerColor = metadata.status === 'failed' ? '#991B1B' : '#1A7A4A';
+  const headerText = metadata.status === 'completed'
+    ? 'Run completed'
+    : metadata.status === 'failed' ? 'Run failed' : `Run #${metadata.run_number}`;
+
+  const userFeedback = metadata.user_feedback || null;
+  const finalOutput = metadata.full_output || metadata.output_preview || null;
+  const durationStr = metadata.duration_seconds ? formatDuration(metadata.duration_seconds) : null;
+
+  return (
+    <div style={{
+      background: '#FFFFFF', border: '1px solid #D4CFC6', borderRadius: '12px', overflow: 'hidden',
+      marginBottom: '4px', maxWidth: '600px', alignSelf: 'flex-start', width: '100%',
+    }}>
+      {/* Header */}
+      <div
+        onClick={onToggle}
+        style={{
+          padding: '11px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          background: headerBg, cursor: 'pointer', borderBottom: isExpanded ? '1px solid #D4CFC6' : 'none'
+        }}
+      >
+        <div style={{ fontSize: '12px', fontWeight: 600, color: headerColor }}>{headerText}</div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          {durationStr && <span style={{ fontSize: '11px', color: '#7A7770' }}>{durationStr}</span>}
+          <Badge status={metadata.status} />
+          <span style={{ fontSize: '11px', color: '#7A7770' }}>{isExpanded ? '↑' : '↓'}</span>
+        </div>
+      </div>
+
+      {!isExpanded ? (
+        <div>
+          {userFeedback && (
+            <div style={{ padding: '10px 16px 0', display: 'flex', gap: '8px', alignItems: 'flex-start' }}>
+              <div style={{ fontSize: '11px', fontWeight: 600, color: '#7A7770', paddingTop: '1px', flexShrink: 0 }}>You said</div>
+              <div style={{
+                background: '#F0EEE9', border: '1px solid #D4CFC6', borderRadius: '6px',
+                padding: '5px 10px', fontSize: '12px', color: '#4A4845', fontStyle: 'italic', flex: 1
+              }}>
+                "{userFeedback}"
+              </div>
+            </div>
+          )}
+          {finalOutput && (
+            <div style={{ padding: '10px 16px', fontSize: '13px', color: '#4A4845', lineHeight: 1.6 }}>
+              {String(finalOutput).substring(0, 180)}{String(finalOutput).length > 180 ? '...' : ''}
+            </div>
+          )}
+          <div style={{ padding: '4px 16px 10px', display: 'flex', justifyContent: 'flex-end' }}>
+            <button
+              onClick={onToggle}
+              style={{ fontSize: '12px', fontWeight: 500, color: '#2E5BBA', background: 'none', border: 'none', cursor: 'pointer' }}
+            >
+              Show full run ↓
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div style={{ animation: 'fadeIn 0.3s ease' }}>
+          {userFeedback && (
+            <div style={{ padding: '10px 16px 0', display: 'flex', gap: '8px', alignItems: 'flex-start' }}>
+              <div style={{ fontSize: '11px', fontWeight: 600, color: '#7A7770', paddingTop: '1px', flexShrink: 0 }}>You said</div>
+              <div style={{
+                background: '#F0EEE9', border: '1px solid #D4CFC6', borderRadius: '6px',
+                padding: '5px 10px', fontSize: '12px', color: '#4A4845', fontStyle: 'italic', flex: 1
+              }}>
+                "{userFeedback}"
+              </div>
+            </div>
+          )}
+          {metadata.steps && metadata.steps.length > 0 && (
+            <div style={{ padding: '12px 16px', borderBottom: '1px solid #F0EEE9' }}>
+              {metadata.steps.map((step, idx) => (
+                <StepRow key={idx} step={step} isLast={idx === metadata.steps.length - 1} />
+              ))}
+            </div>
+          )}
+          {finalOutput && (
+            <div style={{ padding: '12px 16px', background: '#FAFAF8', fontSize: '13px', color: '#1A1916', lineHeight: 1.7, whiteSpace: 'pre-line', borderBottom: '1px solid #F0EEE9' }}>
+              {finalOutput}
+            </div>
+          )}
+          <div style={{ padding: '6px 16px 10px', display: 'flex', justifyContent: 'flex-end' }}>
+            <button
+              onClick={onToggle}
+              style={{ fontSize: '12px', fontWeight: 500, color: '#2E5BBA', background: 'none', border: 'none', cursor: 'pointer' }}
+            >
+              Collapse ↑
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// --- MessageBubble ---
+
 const MessageBubble = ({ message, isExpanded, onToggleRun }: { message: Message; isExpanded?: boolean; onToggleRun?: () => void }) => {
   const isAgent = message.role === 'agent';
-  
+
   if (message.message_type === 'run_card') {
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', width: '100%', marginBottom: '12px' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', width: '100%', marginBottom: '4px' }}>
         <RunCard message={message} isExpanded={!!isExpanded} onToggle={onToggleRun || (() => {})} />
-        <div style={{ fontSize: '11px', color: '#7A7770', alignSelf: 'flex-start', marginTop: '3px', marginBottom: '12px' }}>
+        <div style={{ fontSize: '11px', color: '#7A7770', alignSelf: 'flex-start', marginTop: '2px', marginBottom: '12px' }}>
           {formatTime(message.created_at)}
         </div>
       </div>
@@ -519,13 +651,11 @@ const MessageBubble = ({ message, isExpanded, onToggleRun }: { message: Message;
   );
 
   return (
-    <div style={{ 
-      display: 'flex', 
-      flexDirection: 'column', 
-      alignSelf: isAgent ? 'flex-start' : 'flex-end', 
+    <div style={{
+      display: 'flex', flexDirection: 'column',
+      alignSelf: isAgent ? 'flex-start' : 'flex-end',
       alignItems: isAgent ? 'flex-start' : 'flex-end',
-      maxWidth: '72%', 
-      marginBottom: '12px' 
+      maxWidth: '72%', marginBottom: '12px'
     }}>
       <div style={{
         fontSize: '10px', fontWeight: 600, letterSpacing: '0.5px', textTransform: 'uppercase',
@@ -538,15 +668,11 @@ const MessageBubble = ({ message, isExpanded, onToggleRun }: { message: Message;
         border: isAgent ? '1px solid #C5D4F0' : '1px solid #D4CFC6',
         color: '#1A1916', padding: '11px 14px', borderRadius: '10px',
         fontSize: '13px', lineHeight: '1.55', whiteSpace: 'pre-line',
-        display: isAgent ? 'block' : 'inline-block',
-        textAlign: 'left'
+        display: isAgent ? 'block' : 'inline-block', textAlign: 'left'
       }}>
         {message.content}
       </div>
-      <div style={{ 
-        fontSize: '11px', color: '#7A7770', 
-        marginTop: '3px'
-      }}>
+      <div style={{ fontSize: '11px', color: '#7A7770', marginTop: '3px' }}>
         {formatTime(message.created_at)}
       </div>
     </div>
@@ -568,25 +694,19 @@ function ConversationInner() {
   const [isSending, setIsSending] = useState(false);
   const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
   const [showRunConfirm, setShowRunConfirm] = useState(false);
-  const [isRestarting, setIsRestarting] = useState(false);
   const [autorunAttempted, setAutorunAttempted] = useState(false);
+  const [expandedRuns, setExpandedRuns] = useState<Record<string, boolean>>({});
 
   const threadRef = useRef<HTMLDivElement>(null);
-
   const activeRunIdRef = useRef(activeRunId);
-  useEffect(() => {
-    activeRunIdRef.current = activeRunId;
-  }, [activeRunId]);
+  useEffect(() => { activeRunIdRef.current = activeRunId; }, [activeRunId]);
 
   // Initial Fetch & Polling
   useEffect(() => {
     async function fetchData() {
-      // 1. Fetch Agent
-      const { data: agentData, error: agentErr } = await supabase.from('agents').select('*').eq('id', agentId).single();
-      if (agentErr) console.error('Error fetching agent:', agentErr);
+      const { data: agentData } = await supabase.from('agents').select('*').eq('id', agentId).single();
       if (agentData) setAgent(agentData);
 
-      // 2. Fetch Active Run (Unified Recovery)
       if (agentData && (agentData.status === 'running' || agentData.status === 'waiting_for_human')) {
         const { data: runData } = await supabase.from('agent_runs')
           .select('id')
@@ -600,29 +720,20 @@ function ConversationInner() {
           setActiveRunId(runData.id);
         }
       } else if (agentData && agentData.status !== 'running' && agentData.status !== 'waiting_for_human' && activeRunIdRef.current !== 'starting') {
-        if (activeRunIdRef.current !== null) {
-          console.log('[Sync] Clearing activeRunId because agent is inactive. Agent status:', agentData.status);
-        }
         setActiveRunId(null);
       }
 
-      // 3. Fetch Messages
-      const { data: msgData, error: msgErr } = await supabase.from('agent_conversations')
-        .select('*')
-        .eq('agent_id', agentId)
-        .order('created_at', { ascending: true });
-      if (msgErr) console.error('Error fetching messages:', msgErr);
-      
+      const { data: msgData } = await supabase.from('agent_conversations')
+        .select('*').eq('agent_id', agentId).order('created_at', { ascending: true });
+
       if (msgData) {
         setMessages(prev => {
           const merged = [...msgData];
           prev.forEach(p => {
-            if (p.id.startsWith('temp_') && !merged.find(m => 
-              m.content === p.content && 
+            if (p.id.startsWith('temp_') && !merged.find(m =>
+              m.content === p.content &&
               Math.abs(new Date(m.created_at).getTime() - new Date(p.created_at).getTime()) < 10000
-            )) {
-              merged.push(p);
-            }
+            )) merged.push(p);
           });
           return merged.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
         });
@@ -634,49 +745,54 @@ function ConversationInner() {
     return () => clearInterval(interval);
   }, [agentId]);
 
-  // Debug Logging State Transitions
-
-  // Debug Logging State Transitions
+  // ResizeObserver: auto-scroll to bottom whenever thread content grows
   useEffect(() => {
-    console.log('[Sync] activeRunId state changed:', activeRunId);
+    const container = threadRef.current;
+    if (!container) return;
+
+    const scrollToBottom = () => {
+      const distanceFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
+      if (distanceFromBottom < 200) {
+        container.scrollTop = container.scrollHeight;
+      }
+    };
+
+    const observer = new ResizeObserver(scrollToBottom);
+    // Observe the thread container itself (its scrollHeight changes as content grows)
+    observer.observe(container);
+    // Also immediately scroll on mount
+    scrollToBottom();
+
+    return () => observer.disconnect();
+  }, []);
+
+  // Also scroll when activeRunId changes (new run started)
+  useEffect(() => {
+    if (threadRef.current) {
+      threadRef.current.scrollTop = threadRef.current.scrollHeight;
+    }
   }, [activeRunId]);
 
-  // Handle Autorun
+  // Autorun (once)
   useEffect(() => {
     if (autorun && agent && !activeRunId && !autorunAttempted) {
       setAutorunAttempted(true);
-      // Small delay to allow recovery effect to win if it finds an active run
-      const t = setTimeout(() => {
-        if (!activeRunId) {
-          handleRunNow();
-        }
-      }, 500);
+      const t = setTimeout(() => { if (!activeRunIdRef.current) handleRunNow(); }, 600);
       return () => clearTimeout(t);
     }
   }, [autorun, agent, activeRunId, autorunAttempted]);
 
-
   const handleSendMessage = async () => {
     if (!inputValue.trim() || isSending) return;
     const content = inputValue.trim().toLowerCase();
-    
-    if (content === 'run now') {
-      handleRunNow();
-      setInputValue('');
-      return;
-    }
+    if (content === 'run now') { handleRunNow(); setInputValue(''); return; }
 
     setIsSending(true);
     setInputValue('');
-    
-    // Optimistic UI
+
     const tempMsg: Message = {
-      id: `temp_${Date.now()}`,
-      agent_id: agentId as string,
-      user_id: '',
-      role: 'user',
-      message_type: 'text',
-      content: inputValue.trim(),
+      id: `temp_${Date.now()}`, agent_id: agentId as string, user_id: '',
+      role: 'user', message_type: 'text', content: inputValue.trim(),
       created_at: new Date().toISOString()
     };
     setMessages(prev => [...prev, tempMsg].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()));
@@ -689,38 +805,26 @@ function ConversationInner() {
         body: JSON.stringify({ agent_id: agentId, content: inputValue.trim() })
       });
       const data = await res.json();
-      if (data.intent === 'RUN_TRIGGER' && data.run_id) {
-        setActiveRunId(data.run_id);
-      }
+      if (data.intent === 'RUN_TRIGGER' && data.run_id) setActiveRunId(data.run_id);
     } catch (e) { console.error(e); }
     setIsSending(false);
   };
 
   const handleRunNow = async (force = false) => {
-    // If stuck waiting for user input, just scroll to the widget instead of blocking
     if (activeRunId && !force && agent?.status === 'waiting_for_human') {
-      setTimeout(() => {
-        document.getElementById('live-run-widget')?.scrollIntoView({ behavior: 'smooth', block: 'end' });
-      }, 50);
+      threadRef.current && (threadRef.current.scrollTop = threadRef.current.scrollHeight);
       return;
     }
-
-    // If already tracking a run (not waiting), block without force
     if (activeRunId && activeRunId !== 'starting' && !force && agent?.status === 'running') {
-      setShowRunConfirm(true);
-      return;
+      setShowRunConfirm(true); return;
     }
-
-    // If a run exists we didn't start ourselves, ask for confirmation
     if (!activeRunId && agent?.status === 'running' && !force) {
-      setShowRunConfirm(true);
-      return;
+      setShowRunConfirm(true); return;
     }
 
-    // Optimistic UI start
     setActiveRunId('starting');
     setShowRunConfirm(false);
-    
+
     try {
       const { data: { session } } = await supabase.auth.getSession();
       const res = await fetch('/api/runs/start', {
@@ -732,7 +836,6 @@ function ConversationInner() {
       if (res.ok) {
         setActiveRunId(data.run_id);
       } else {
-        console.error('[handleRunNow] API failed', data);
         if (data.error?.toLowerCase().includes('already running') || data.code === 'ACTIVE_RUN_EXISTS') {
           setShowRunConfirm(true);
         } else {
@@ -740,10 +843,7 @@ function ConversationInner() {
         }
         setActiveRunId(null);
       }
-    } catch (e) { 
-      console.error('[handleRunNow] Exception:', e); 
-      setActiveRunId(null);
-    }
+    } catch (e) { console.error(e); setActiveRunId(null); }
   };
 
   const handlePause = async () => {
@@ -759,28 +859,44 @@ function ConversationInner() {
     } catch (e) { console.error(e); }
   };
 
-  const [expandedRuns, setExpandedRuns] = useState<Record<string, boolean>>({});
+  // Determine if the LiveRunWidget should be shown inline in thread
+  const hasRunCardForActiveRun = useMemo(
+    () => messages.some(m => m.run_id === activeRunId && m.message_type === 'run_card'),
+    [messages, activeRunId]
+  );
+  const showLiveWidget = !!activeRunId && !hasRunCardForActiveRun;
 
-  // Group by day logic
+  // Build thread elements
   const threadElements = useMemo(() => {
     const elements: React.ReactNode[] = [];
     let lastDate = '';
 
-    messages.forEach((msg) => {
+    messages.forEach(msg => {
       const date = new Date(msg.created_at).toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
       if (date !== lastDate) {
         elements.push(<DayDivider key={`divider-${msg.id}`} date={date} />);
         lastDate = date;
       }
       elements.push(
-        <MessageBubble 
-          key={msg.id} 
-          message={msg} 
-          isExpanded={expandedRuns[msg.id]} 
+        <MessageBubble
+          key={msg.id} message={msg}
+          isExpanded={expandedRuns[msg.id]}
           onToggleRun={() => setExpandedRuns(prev => ({ ...prev, [msg.id]: !prev[msg.id] }))}
         />
       );
     });
+
+    // Live widget inline at the bottom of the thread
+    if (showLiveWidget) {
+      elements.push(
+        <LiveRunWidget
+          key={`live-${activeRunId}`}
+          runId={activeRunId!}
+          agentId={agentId as string}
+          onComplete={() => setActiveRunId(null)}
+        />
+      );
+    }
 
     if (elements.length === 0) {
       return (
@@ -792,70 +908,29 @@ function ConversationInner() {
     }
 
     return elements;
-  }, [messages, agentId, expandedRuns]);
-
-  const hasRunCardForActiveRun = useMemo(
-    () => messages.some(m => m.run_id === activeRunId && m.message_type === 'run_card'),
-    [messages, activeRunId]
-  );
-  const showLiveWidget = !!activeRunId && !hasRunCardForActiveRun;
-
-  // Scroll to bottom on new messages or when a run starts/changes
-  useEffect(() => {
-    if (threadRef.current) {
-      threadRef.current.scrollTop = threadRef.current.scrollHeight;
-    }
-  }, [messages.length, activeRunId]);
+  }, [messages, activeRunId, agentId, expandedRuns, showLiveWidget]);
 
   return (
-    <div style={{
-      display: 'grid',
-      gridTemplateColumns: '1fr 300px',
-      height: '100vh',
-      overflow: 'hidden'
-    }}>
+    <div style={{ display: 'grid', gridTemplateColumns: '1fr 300px', height: '100vh', overflow: 'hidden' }}>
       <style>{`
-        @keyframes pulse {
-          0%, 100% { opacity: 1; transform: scale(1); }
-          50% { opacity: 0.4; transform: scale(0.9); }
-        }
-        @keyframes fadeIn {
-          from { opacity: 0; }
-          to { opacity: 1; }
-        }
-        @keyframes fadeInUp {
-          from { opacity: 0; transform: translateY(10px); }
-          to { opacity: 1; transform: translateY(0); }
-        }
-        .spinner-mini {
-          width: 10px; height: 10px; border: 2px solid rgba(46, 91, 186, 0.2); border-top: 2px solid #2E5BBA;
-          border-radius: 50%; animation: spin 0.8s linear infinite;
-        }
+        @keyframes pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.4; transform: scale(0.9); } }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes fadeInUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .spinner-mini { width: 10px; height: 10px; border: 2px solid rgba(46,91,186,0.2); border-top: 2px solid #2E5BBA; border-radius: 50%; animation: spin 0.8s linear infinite; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
       `}</style>
 
-      {/* Profile Panel Overlay */}
       {selectedAgentId && (
         <ProfilePanel agentId={selectedAgentId} onClose={() => setSelectedAgentId(null)} onRunNow={handleRunNow} />
       )}
 
       {/* Chat Column */}
-      <div style={{
-        display: 'flex',
-        flexDirection: 'column',
-        height: '100vh',
-        overflow: 'hidden',
-        flex: 1,
-        minWidth: 0,
-        borderRight: '1px solid #D4CFC6'
-      }}>
+      <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden', flex: 1, minWidth: 0, borderRight: '1px solid #D4CFC6' }}>
+
         {/* Header */}
         <header style={{ height: '56px', flexShrink: 0, padding: '0 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid #D4CFC6', background: '#FFFFFF' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <div style={{
-              width: '32px', height: '32px', background: '#1A1916', borderRadius: '8px',
-              display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#FFFFFF', fontSize: '14px', fontWeight: 600
-            }}>
+            <div style={{ width: '32px', height: '32px', background: '#1A1916', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#FFFFFF', fontSize: '14px', fontWeight: 600 }}>
               {agent?.name?.charAt(0).toUpperCase() || 'A'}
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -864,16 +939,17 @@ function ConversationInner() {
             </div>
           </div>
           <div style={{ display: 'flex', gap: '8px' }}>
-            <button 
+            <button
               onClick={() => handleRunNow()}
-              style={{ 
-                background: agent?.status === 'waiting_for_human' ? '#8A5C00' : '#1A1916', 
-                color: '#FFFFFF', border: 'none', borderRadius: '8px', padding: '7px 16px', fontSize: '13px', fontWeight: 500, cursor: 'pointer' 
+              style={{
+                background: agent?.status === 'waiting_for_human' ? '#8A5C00' : '#1A1916',
+                color: '#FFFFFF', border: 'none', borderRadius: '8px', padding: '7px 16px',
+                fontSize: '13px', fontWeight: 500, cursor: 'pointer'
               }}
             >
-              {agent?.status === 'waiting_for_human' ? '⏸ View checkpoint' : 'Run now'}
+              {agent?.status === 'waiting_for_human' ? '⏸ Scroll to checkpoint' : 'Run now'}
             </button>
-            <button 
+            <button
               onClick={handlePause}
               style={{ background: '#FFFFFF', color: '#4A4845', border: '1px solid #D4CFC6', borderRadius: '8px', padding: '7px 16px', fontSize: '13px', fontWeight: 500, cursor: 'pointer' }}
             >
@@ -884,66 +960,29 @@ function ConversationInner() {
 
         {/* Thread */}
         <div ref={threadRef} style={{
-          flex: 1,
-          overflowY: 'auto',
-          minHeight: 0,
-          padding: '20px 24px 12px',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 0,
-          background: '#F7F6F3'
+          flex: 1, overflowY: 'auto', minHeight: 0, padding: '20px 24px 24px',
+          display: 'flex', flexDirection: 'column', gap: 0, background: '#F7F6F3'
         }}>
           {threadElements}
         </div>
 
-        {/* Live Run Widget — always visible, sits between thread and input */}
-        {showLiveWidget && (
-          <div style={{
-            flexShrink: 0,
-            padding: '0 24px 8px',
-            background: '#F7F6F3',
-            maxHeight: '55vh',
-            overflowY: 'auto',
-            borderTop: '1px solid #E8E6E0'
-          }}>
-            <LiveRunWidget
-              runId={activeRunId!}
-              agentId={agentId as string}
-              onComplete={() => setActiveRunId(null)}
-            />
-          </div>
-        )}
-
-        {/* Input area */}
+        {/* Input */}
         <div style={{ flexShrink: 0, padding: '12px 20px', borderTop: '1px solid #D4CFC6', background: '#FFFFFF', display: 'flex', alignItems: 'flex-end', gap: '10px' }}>
-          <textarea 
+          <textarea
             value={inputValue}
             placeholder="Type a message, give feedback, or say 'run now'"
-            onChange={(e) => {
+            onChange={e => {
               setInputValue(e.target.value);
               e.target.style.height = 'auto';
               e.target.style.height = Math.min(e.target.scrollHeight, 120) + 'px';
             }}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                handleSendMessage();
-              }
-            }}
-            style={{
-              flex: 1, minHeight: '40px', maxHeight: '120px', padding: '10px 14px',
-              border: '1.5px solid #D4CFC6', borderRadius: '10px', fontSize: '13px',
-              fontFamily: 'inherit', color: '#1A1916', resize: 'none', lineHeight: 1.5
-            }}
+            onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendMessage(); } }}
+            style={{ flex: 1, minHeight: '40px', maxHeight: '120px', padding: '10px 14px', border: '1.5px solid #D4CFC6', borderRadius: '10px', fontSize: '13px', fontFamily: 'inherit', color: '#1A1916', resize: 'none', lineHeight: 1.5 }}
           />
-          <button 
+          <button
             onClick={handleSendMessage}
             disabled={!inputValue.trim() || isSending}
-            style={{
-              width: '28px', height: '28px', background: '#1A1916', borderRadius: '7px',
-              border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center',
-              cursor: 'pointer', opacity: inputValue.trim() ? 1 : 0.3, transition: 'opacity 0.2s'
-            }}
+            style={{ width: '28px', height: '28px', background: '#1A1916', borderRadius: '7px', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', opacity: inputValue.trim() ? 1 : 0.3, transition: 'opacity 0.2s' }}
           >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5">
               <path d="M5 12h14M12 5l7 7-7 7" />
@@ -959,46 +998,28 @@ function ConversationInner() {
 
       {/* Concurrency Modal */}
       {showRunConfirm && (
-        <div style={{
-          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000,
-          backdropFilter: 'blur(4px)'
-        }}>
-          <div style={{
-            background: 'white', padding: '24px', borderRadius: '16px', maxWidth: '400px', width: '100%',
-            boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04)'
-          }}>
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, backdropFilter: 'blur(4px)' }}>
+          <div style={{ background: 'white', padding: '24px', borderRadius: '16px', maxWidth: '400px', width: '100%', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)' }}>
             <h3 style={{ fontSize: '18px', fontWeight: 600, color: '#1A1916', marginBottom: '8px' }}>Agent is already active</h3>
             <p style={{ fontSize: '14px', color: '#4A4845', lineHeight: 1.5, marginBottom: '24px' }}>
               An agent run is currently executing. You can either continue viewing the existing run or terminate it to start a fresh one.
             </p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              <button 
-                onClick={() => {
-                  setShowRunConfirm(false);
-                }}
-                style={{
-                  padding: '12px', background: '#F7F6F3', border: '1px solid #D4CFC6', borderRadius: '8px',
-                  fontSize: '13px', fontWeight: 600, color: '#1A1916', cursor: 'pointer'
-                }}
+              <button
+                onClick={() => setShowRunConfirm(false)}
+                style={{ padding: '12px', background: '#F7F6F3', border: '1px solid #D4CFC6', borderRadius: '8px', fontSize: '13px', fontWeight: 600, color: '#1A1916', cursor: 'pointer' }}
               >
                 Let old agent run
               </button>
-              <button 
+              <button
                 onClick={() => handleRunNow(true)}
-                style={{
-                  padding: '12px', background: '#EF4444', border: 'none', borderRadius: '8px',
-                  fontSize: '13px', fontWeight: 600, color: '#FFFFFF', cursor: 'pointer'
-                }}
+                style={{ padding: '12px', background: '#EF4444', border: 'none', borderRadius: '8px', fontSize: '13px', fontWeight: 600, color: '#FFFFFF', cursor: 'pointer' }}
               >
                 Kill last run and start new
               </button>
-              <button 
+              <button
                 onClick={() => setShowRunConfirm(false)}
-                style={{
-                  padding: '8px', background: 'none', border: 'none',
-                  fontSize: '12px', fontWeight: 500, color: '#7A7770', cursor: 'pointer'
-                }}
+                style={{ padding: '8px', background: 'none', border: 'none', fontSize: '12px', fontWeight: 500, color: '#7A7770', cursor: 'pointer' }}
               >
                 Cancel
               </button>
@@ -1009,8 +1030,6 @@ function ConversationInner() {
     </div>
   );
 }
-
-// --- Wrapper for Suspense ---
 
 export default function AgentConversationPage() {
   return (
