@@ -322,14 +322,21 @@ const LiveRunWidget = ({ runId, agentId, onComplete }: { runId: string, agentId:
   const [steps, setSteps] = useState<any[]>([]);
   const [resumeLoading, setResumeLoading] = useState(false);
 
-  // Auto-scroll when the widget expands from "Starting..." to full view
+  // Scroll into view on first mount
+  useEffect(() => {
+    setTimeout(() => {
+      document.getElementById('live-run-widget')?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+    }, 150);
+  }, []);
+
+  // Also scroll when data arrives (widget expands)
   useEffect(() => {
     if (run || steps.length > 0) {
       setTimeout(() => {
         document.getElementById('live-run-widget')?.scrollIntoView({ behavior: 'smooth', block: 'end' });
       }, 100);
     }
-  }, [run, steps]);
+  }, [run?.status, steps.length]);
 
   useEffect(() => {
     async function poll() {
@@ -418,12 +425,12 @@ const LiveRunWidget = ({ runId, agentId, onComplete }: { runId: string, agentId:
         alignItems: 'center',
         justifyContent: 'space-between',
         borderBottom: '1px solid #D4CFC6',
-        background: run.status === 'failed' ? '#FEE2E2' : 'transparent',
+        background: run.status === 'failed' ? '#FEE2E2' : run.status === 'waiting_for_human' ? '#FEF8EC' : 'transparent',
       }}>
-        <div style={{ fontSize: '12px', fontWeight: 600, color: '#1A1916' }}>
-          {run.status === 'completed' ? 'Run finished' : run.status === 'failed' ? 'Run failed' : 'Starting run...'}
+        <div style={{ fontSize: '12px', fontWeight: 600, color: run.status === 'waiting_for_human' ? '#8A5C00' : '#1A1916' }}>
+          {run.status === 'completed' ? 'Run finished' : run.status === 'failed' ? 'Run failed' : run.status === 'waiting_for_human' ? '⏸ Waiting for your input' : 'Agent running...'}
         </div>
-        <Badge status={run.status === 'completed' ? 'completed' : run.status === 'failed' ? 'failed' : 'running'} pulse={run.status === 'running'} />
+        <Badge status={run.status === 'completed' ? 'completed' : run.status === 'failed' ? 'failed' : run.status === 'waiting_for_human' ? 'waiting_for_human' : 'running'} pulse={run.status === 'running' || run.status === 'waiting_for_human'} />
       </div>
 
       <div style={{ padding: '12px 16px' }}>
@@ -711,9 +718,22 @@ function ConversationInner() {
   };
 
   const handleRunNow = async (force = false) => {
-    if (activeRunId && !force) return;
-    
-    if (agent?.status === 'running' && !activeRunId && !force) {
+    // If stuck waiting for user input, just scroll to the widget instead of blocking
+    if (activeRunId && !force && agent?.status === 'waiting_for_human') {
+      setTimeout(() => {
+        document.getElementById('live-run-widget')?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+      }, 50);
+      return;
+    }
+
+    // If already tracking a run (not waiting), block without force
+    if (activeRunId && activeRunId !== 'starting' && !force && agent?.status === 'running') {
+      setShowRunConfirm(true);
+      return;
+    }
+
+    // If a run exists we didn't start ourselves, ask for confirmation
+    if (!activeRunId && agent?.status === 'running' && !force) {
       setShowRunConfirm(true);
       return;
     }
@@ -855,15 +875,18 @@ function ConversationInner() {
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <span style={{ fontSize: '14px', fontWeight: 600, color: '#1A1916' }}>{agent?.name}</span>
-              {agent && <Badge status={agent.status} pulse={agent.status === 'running'} />}
+              {agent && <Badge status={agent.status} pulse={agent.status === 'running' || agent.status === 'waiting_for_human'} />}
             </div>
           </div>
           <div style={{ display: 'flex', gap: '8px' }}>
             <button 
               onClick={() => handleRunNow()}
-              style={{ background: '#1A1916', color: '#FFFFFF', border: 'none', borderRadius: '8px', padding: '7px 16px', fontSize: '13px', fontWeight: 500, cursor: 'pointer' }}
+              style={{ 
+                background: agent?.status === 'waiting_for_human' ? '#8A5C00' : '#1A1916', 
+                color: '#FFFFFF', border: 'none', borderRadius: '8px', padding: '7px 16px', fontSize: '13px', fontWeight: 500, cursor: 'pointer' 
+              }}
             >
-              Run now
+              {agent?.status === 'waiting_for_human' ? '⏸ View checkpoint' : 'Run now'}
             </button>
             <button 
               onClick={handlePause}
