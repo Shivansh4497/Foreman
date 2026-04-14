@@ -322,6 +322,15 @@ const LiveRunWidget = ({ runId, agentId, onComplete }: { runId: string, agentId:
   const [steps, setSteps] = useState<any[]>([]);
   const [resumeLoading, setResumeLoading] = useState(false);
 
+  // Auto-scroll when the widget expands from "Starting..." to full view
+  useEffect(() => {
+    if (run || steps.length > 0) {
+      setTimeout(() => {
+        document.getElementById('live-run-widget')?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+      }, 100);
+    }
+  }, [run, steps]);
+
   useEffect(() => {
     async function poll() {
       if (runId === 'starting') return;
@@ -358,7 +367,7 @@ const LiveRunWidget = ({ runId, agentId, onComplete }: { runId: string, agentId:
 
   if (!run) {
     return (
-      <div style={{
+      <div id="live-run-widget" style={{
         background: '#FFFFFF',
         border: '1px solid #D4CFC6',
         borderRadius: '12px',
@@ -392,7 +401,7 @@ const LiveRunWidget = ({ runId, agentId, onComplete }: { runId: string, agentId:
   const stepStatuses = run.global_state?.step_statuses || {};
 
   return (
-    <div style={{
+    <div id="live-run-widget" style={{
       background: '#FFFFFF',
       border: '1px solid #D4CFC6',
       borderRadius: '12px',
