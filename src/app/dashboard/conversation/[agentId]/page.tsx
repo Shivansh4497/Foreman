@@ -782,11 +782,6 @@ function ConversationInner() {
       );
     });
 
-    const hasRunCardForActiveRun = messages.some(m => m.run_id === activeRunId && m.message_type === 'run_card');
-    if (activeRunId && !hasRunCardForActiveRun) {
-      elements.push(<LiveRunWidget key="live-run" runId={activeRunId} agentId={agentId as string} onComplete={() => setActiveRunId(null)} />);
-    }
-
     if (elements.length === 0) {
       return (
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', opacity: 0.5 }}>
@@ -796,10 +791,14 @@ function ConversationInner() {
       );
     }
 
-    elements.push(<div key="bottom" style={{ height: '1px' }} />);
-
     return elements;
-  }, [messages, activeRunId, agentId, expandedRuns]);
+  }, [messages, agentId, expandedRuns]);
+
+  const hasRunCardForActiveRun = useMemo(
+    () => messages.some(m => m.run_id === activeRunId && m.message_type === 'run_card'),
+    [messages, activeRunId]
+  );
+  const showLiveWidget = !!activeRunId && !hasRunCardForActiveRun;
 
   // Scroll to bottom on new messages or when a run starts/changes
   useEffect(() => {
@@ -888,7 +887,7 @@ function ConversationInner() {
           flex: 1,
           overflowY: 'auto',
           minHeight: 0,
-          padding: '20px 24px',
+          padding: '20px 24px 12px',
           display: 'flex',
           flexDirection: 'column',
           gap: 0,
@@ -896,6 +895,24 @@ function ConversationInner() {
         }}>
           {threadElements}
         </div>
+
+        {/* Live Run Widget — always visible, sits between thread and input */}
+        {showLiveWidget && (
+          <div style={{
+            flexShrink: 0,
+            padding: '0 24px 8px',
+            background: '#F7F6F3',
+            maxHeight: '55vh',
+            overflowY: 'auto',
+            borderTop: '1px solid #E8E6E0'
+          }}>
+            <LiveRunWidget
+              runId={activeRunId!}
+              agentId={agentId as string}
+              onComplete={() => setActiveRunId(null)}
+            />
+          </div>
+        )}
 
         {/* Input area */}
         <div style={{ flexShrink: 0, padding: '12px 20px', borderTop: '1px solid #D4CFC6', background: '#FFFFFF', display: 'flex', alignItems: 'flex-end', gap: '10px' }}>
