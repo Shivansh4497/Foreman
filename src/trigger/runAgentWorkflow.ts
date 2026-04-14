@@ -368,6 +368,7 @@ Perform the objective now. Output ONLY what is requested in the OUT FORMAT. Do n
       logger.error("Exception in run_card posting logic", { error: err.message });
     }
 
+    await markAgentIdle(run.agent_id, supabase);
     logger.info(`Run ${payload.run_id} successfully finished (#${run.run_number}).`);
     return { success: true };
   }
@@ -417,6 +418,24 @@ async function failRun(runId: string, errorReason: string, agentId: string, user
     }
   } catch (err: any) {
     logger.error("Exception in failure run_card posting logic", { error: err.message });
+  }
+
+  await markAgentIdle(agentId, supabase);
+}
+
+async function markAgentIdle(agentId: string, supabase: any) {
+  try {
+    const { count } = await supabase
+      .from('agent_runs')
+      .select('id', { count: 'exact', head: true })
+      .eq('agent_id', agentId)
+      .in('status', ['pending', 'running', 'waiting_for_human']);
+      
+    if (count === 0) {
+      await supabase.from('agents').update({ status: 'active' }).eq('id', agentId).eq('status', 'running');
+    }
+  } catch (err: any) {
+    logger.error("Failed to mark agent idle", { error: err.message });
   }
 }
 

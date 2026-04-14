@@ -529,7 +529,7 @@ const MessageBubble = ({ message, isExpanded, onToggleRun }: { message: Message;
     }}>
       <div style={{
         fontSize: '10px', fontWeight: 600, letterSpacing: '0.5px', textTransform: 'uppercase',
-        color: '#7A7770', marginBottom: '4px', textAlign: isAgent ? 'left' : 'right'
+        color: isAgent ? '#2E5BBA' : '#7A7770', marginBottom: '4px', textAlign: isAgent ? 'left' : 'right'
       }}>
         {isAgent ? 'AGENT' : 'YOU'}
       </div>
@@ -585,7 +585,7 @@ function ConversationInner() {
         const { data: runData } = await supabase.from('agent_runs')
           .select('id')
           .eq('agent_id', agentId)
-          .in('status', ['running', 'waiting_for_human'])
+          .in('status', ['pending', 'running', 'waiting_for_human'])
           .order('created_at', { ascending: false })
           .limit(1)
           .maybeSingle();
@@ -608,8 +608,11 @@ function ConversationInner() {
         setMessages(prev => {
           const merged = [...msgData];
           prev.forEach(p => {
-            if (p.id.includes('.') && !merged.find(m => m.content === p.content && Math.abs(new Date(m.created_at).getTime() - new Date(p.created_at).getTime()) < 5000)) {
-               merged.push(p);
+            if (p.id.startsWith('temp_') && !merged.find(m => 
+              m.content === p.content && 
+              Math.abs(new Date(m.created_at).getTime() - new Date(p.created_at).getTime()) < 10000
+            )) {
+              merged.push(p);
             }
           });
           return merged.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
@@ -663,7 +666,7 @@ function ConversationInner() {
     
     // Optimistic UI
     const tempMsg: Message = {
-      id: Math.random().toString(),
+      id: `temp_${Date.now()}`,
       agent_id: agentId as string,
       user_id: '',
       role: 'user',
@@ -776,7 +779,12 @@ function ConversationInner() {
   }, [messages, activeRunId, agentId, expandedRuns]);
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '1fr 300px', height: '100vh', overflow: 'hidden', background: '#FFFFFF', fontFamily: "'DM Sans', sans-serif" }}>
+    <div style={{
+      display: 'grid',
+      gridTemplateColumns: '1fr 300px',
+      height: '100vh',
+      overflow: 'hidden'
+    }}>
       <style>{`
         @keyframes pulse {
           0%, 100% { opacity: 1; transform: scale(1); }
@@ -803,7 +811,15 @@ function ConversationInner() {
       )}
 
       {/* Chat Column */}
-      <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', borderRight: '1px solid #D4CFC6' }}>
+      <div style={{
+        display: 'flex',
+        flexDirection: 'column',
+        height: '100vh',
+        overflow: 'hidden',
+        flex: 1,
+        minWidth: 0,
+        borderRight: '1px solid #D4CFC6'
+      }}>
         {/* Header */}
         <header style={{ height: '56px', flexShrink: 0, padding: '0 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid #D4CFC6', background: '#FFFFFF' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -835,7 +851,16 @@ function ConversationInner() {
         </header>
 
         {/* Thread */}
-        <div ref={threadRef} style={{ flex: 1, overflowY: 'auto', padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 0, background: '#F7F6F3', minHeight: 0 }}>
+        <div ref={threadRef} style={{
+          flex: 1,
+          overflowY: 'auto',
+          minHeight: 0,
+          padding: '20px 24px',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 0,
+          background: '#F7F6F3'
+        }}>
           {threadElements}
         </div>
 
