@@ -569,6 +569,7 @@ function ConversationInner() {
   const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
   const [showRunConfirm, setShowRunConfirm] = useState(false);
   const [isRestarting, setIsRestarting] = useState(false);
+  const [autorunAttempted, setAutorunAttempted] = useState(false);
 
   const threadRef = useRef<HTMLDivElement>(null);
 
@@ -642,7 +643,8 @@ function ConversationInner() {
 
   // Handle Autorun
   useEffect(() => {
-    if (autorun && agent && !activeRunId) {
+    if (autorun && agent && !activeRunId && !autorunAttempted) {
+      setAutorunAttempted(true);
       // Small delay to allow recovery effect to win if it finds an active run
       const t = setTimeout(() => {
         if (!activeRunId) {
@@ -651,7 +653,7 @@ function ConversationInner() {
       }, 500);
       return () => clearTimeout(t);
     }
-  }, [autorun, agent, activeRunId]);
+  }, [autorun, agent, activeRunId, autorunAttempted]);
 
   // Auto-scroll
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -723,7 +725,11 @@ function ConversationInner() {
         setActiveRunId(data.run_id);
       } else {
         console.error('[handleRunNow] API failed', data);
-        alert(data.error || 'Failed to start run');
+        if (data.error?.toLowerCase().includes('already running') || data.code === 'ACTIVE_RUN_EXISTS') {
+          setShowRunConfirm(true);
+        } else {
+          alert(data.error || 'Failed to start run');
+        }
         setActiveRunId(null);
       }
     } catch (e) { 
