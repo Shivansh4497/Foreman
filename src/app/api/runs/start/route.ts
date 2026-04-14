@@ -76,7 +76,7 @@ export async function POST(request: Request) {
             role: 'agent',
             message_type: 'run_card',
             content: 'Run cancelled by user',
-            metadata: { status: 'cancelled', run_number: 0 }
+            metadata: { status: 'cancelled', run_number: 0, cancelled_by_user: true }
           });
         }
       }

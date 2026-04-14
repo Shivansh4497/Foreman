@@ -28,13 +28,14 @@ interface Step {
 
 interface RunMetadata {
   run_number: number;
-  status: 'completed' | 'failed' | 'running' | 'waiting_for_human';
+  status: 'completed' | 'failed' | 'running' | 'waiting_for_human' | 'cancelled';
   step_count: number;
   duration_seconds: number;
   output_preview: string;
   full_output?: string;
   error?: string;
   steps: Step[];
+  cancelled_by_user?: boolean;
 }
 
 interface Message {
@@ -148,7 +149,31 @@ const RunCard = ({ message, isExpanded, onToggle }: { message: Message; isExpand
   const date = new Date(message.created_at);
   const formattedDate = date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
   const timeStr = date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
-  const headerStr = `Run #${metadata.run_number} · ${formattedDate} · ${timeStr}`;
+  const HeaderStr = `Run #${metadata.run_number} · ${formattedDate} · ${timeStr}`;
+  
+  if (metadata.cancelled_by_user) {
+    return (
+      <div style={{
+        padding: '8px 16px',
+        margin: '8px 0 16px',
+        fontSize: '12px',
+        color: '#7A7770',
+        display: 'flex',
+        alignItems: 'center',
+        gap: '8px',
+        fontStyle: 'italic',
+        background: '#F7F6F3',
+        borderRadius: '8px',
+        alignSelf: 'flex-start',
+        border: '1px solid #EAE9E4'
+      }}>
+        <div style={{ width: '6px', height: '6px', background: '#D4CFC6', borderRadius: '50%' }} />
+        Run cancelled by user · {timeStr}
+      </div>
+    );
+  }
+
+  const headerStr = HeaderStr;
 
   return (
     <div style={{
@@ -615,7 +640,7 @@ function ConversationInner() {
     }
 
     recoverActiveRun();
-  }, [agentId, syncTrigger]);
+  }, [agentId, syncTrigger, agent?.status]);
 
   // Debug Logging State Transitions
   useEffect(() => {
@@ -625,9 +650,15 @@ function ConversationInner() {
   // Handle Autorun
   useEffect(() => {
     if (autorun && agent && !activeRunId) {
-      handleRunNow();
+      // Small delay to allow recovery effect to win if it finds an active run
+      const t = setTimeout(() => {
+        if (!activeRunId) {
+          handleRunNow();
+        }
+      }, 500);
+      return () => clearTimeout(t);
     }
-  }, [autorun, agent]);
+  }, [autorun, agent, activeRunId]);
 
   // Auto-scroll
   const bottomRef = useRef<HTMLDivElement>(null);
