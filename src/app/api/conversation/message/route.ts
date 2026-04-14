@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { callLLM } from '@/lib/llm';
 import { tasks } from '@trigger.dev/sdk/v3';
+import { startAgentRun } from '@/lib/runs/service';
 
 export async function POST(request: Request) {
   try {
@@ -124,8 +125,9 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: true, intent: classifiedIntent });
 
     } else if (classifiedIntent === 'RUN_TRIGGER' || content.toLowerCase().includes('run now')) {
-      // Check if already running
-      if (agent.status === 'running') {
+      const result = await startAgentRun(supabase, agent_id, user.id);
+
+      if (result.message === 'Agent is already running') {
         await supabase.from('agent_conversations').insert({
           agent_id,
           user_id: user.id,
@@ -136,41 +138,15 @@ export async function POST(request: Request) {
         return NextResponse.json({ success: true, intent: 'RUN_TRIGGER', status: 'already_running' });
       }
 
-      // Fetch max run number
-      const { count } = await supabase
-        .from('agent_runs')
-        .select('*', { count: 'exact', head: true })
-        .eq('agent_id', agent_id);
-      
-      const runNumber = (count || 0) + 1;
-
-      // Create new run
-      const { data: newRun, error: runErr } = await supabase
-        .from('agent_runs')
-        .insert({
-          agent_id,
-          user_id: user.id,
-          status: 'running',
-          global_state: { current_step: 1, step_statuses: {} }
-        })
-        .select()
-        .single();
-
-      if (runErr || !newRun) {
-        return NextResponse.json({ error: 'Failed to start run' }, { status: 500 });
+      if (!result.success) {
+        return NextResponse.json({ error: result.error || 'Failed to start run' }, { status: 500 });
       }
-
-      // Update agent status
-      await supabase.from('agents').update({ status: 'running' }).eq('id', agent_id);
-
-      // Fire Trigger.dev
-      await tasks.trigger('run-agent-workflow', { run_id: newRun.id });
 
       return NextResponse.json({ 
         success: true, 
         intent: 'RUN_TRIGGER', 
-        run_id: newRun.id,
-        run_number: (count || 0) + 1 
+        run_id: result.run_id,
+        run_number: result.run_number 
       });
 
     } else if (classifiedIntent === 'QUESTION') {

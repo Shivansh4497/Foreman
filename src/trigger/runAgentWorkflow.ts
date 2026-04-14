@@ -22,9 +22,27 @@ export const runAgentWorkflow = task({
       .single();
 
     if (runErr || !run) {
-      logger.error("Run not found or failed to fetch", { errorMessage: runErr?.message });
-      throw new Error("Run not found");
+      logger.info("Run not found or failed to fetch", { errorMessage: runErr?.message });
+      return; // Exit silently if run not found
     }
+
+    // 1.1 Atomic Claim (Idempotency Guard)
+    // Only proceed if we can transition from 'pending' to 'running'
+    // If it's already 'running' (e.g. from a previous trigger), we exit to avoid duplicate work.
+    const { data: claimedRun, error: claimErr } = await supabase
+      .from('agent_runs')
+      .update({ status: 'running' })
+      .eq('id', payload.run_id)
+      .eq('status', 'pending')
+      .select()
+      .single();
+
+    if (claimErr || !claimedRun) {
+      logger.warn(`Run ${payload.run_id} could not be claimed (status: ${run.status}). Possible duplicate trigger. Exiting.`);
+      return;
+    }
+    
+    logger.info(`Run ${payload.run_id} claimed successfully.`);
 
     const { data: llmConfig, error: configErr } = await supabase
       .from('user_llm_config')
@@ -57,6 +75,12 @@ export const runAgentWorkflow = task({
     // --- Step 2: Checkpoint Feedback Capture ---
     const processedFeedback = globalState.processed_feedback || [];
     let feedbackModified = false;
+
+    // Heartbeat check
+    if (await isCancelled(run.id, supabase)) {
+      logger.info("Run cancelled, aborting feedback processing");
+      return;
+    }
 
     for (const key of Object.keys(globalState)) {
       if (key.match(/^step_\d+_human_feedback$/) && !processedFeedback.includes(key)) {
@@ -115,6 +139,12 @@ export const runAgentWorkflow = task({
     const targetSteps = steps.filter(s => s.step_number >= currentStepNumber);
 
     for (const step of targetSteps) {
+      // Periodic cancellation check
+      if (await isCancelled(run.id, supabase)) {
+        logger.info("Run cancelled by user, aborting execution loop");
+        return;
+      }
+
       globalState.current_step = step.step_number;
       stepStatuses[step.step_number.toString()] = "running";
       
@@ -223,6 +253,7 @@ Perform the objective now. Output ONLY what is requested in the OUT FORMAT. Do n
 
     // --- Step 1: Run Completion Summary ---
     try {
+      if (await isCancelled(run.id, supabase)) return;
       logger.info("About to write memory summary");
       
       // Prune and truncate state to avoid context explosion/Rate Limit payload limits (6000 TPM on Groq free)
@@ -254,6 +285,8 @@ Perform the objective now. Output ONLY what is requested in the OUT FORMAT. Do n
     // --- End Step 1 ---
 
     // 4. Job Complete
+    if (await isCancelled(run.id, supabase)) return;
+
     await supabase
       .from('agent_runs')
       .update({
@@ -402,4 +435,13 @@ async function updateAgentMemory(agentId: string, entry: string, supabase: any) 
   } catch (err) {
     logger.error("Failed to update agent memory (catch block)", { err: err instanceof Error ? err.message : String(err) });
   }
+}
+
+async function isCancelled(runId: string, supabase: any) {
+  const { data } = await supabase
+    .from('agent_runs')
+    .select('status')
+    .eq('id', runId)
+    .single();
+  return data?.status === 'cancelled';
 }

@@ -71,9 +71,14 @@ export async function POST(request: Request) {
       .eq('id', run_id);
 
     // Awaken Trigger pipeline identically
-    await tasks.trigger<typeof runAgentWorkflow>('run-agent-workflow', {
+    const trigger = await tasks.trigger<typeof runAgentWorkflow>('run-agent-workflow', {
       run_id: run.id,
     });
+
+    await serviceClient
+      .from('agent_runs')
+      .update({ trigger_task_id: trigger.id })
+      .eq('id', run_id);
 
     return NextResponse.json({ success: true, run_id: run.id });
 
