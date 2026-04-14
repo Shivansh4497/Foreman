@@ -569,7 +569,6 @@ function ConversationInner() {
   const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
   const [showRunConfirm, setShowRunConfirm] = useState(false);
   const [isRestarting, setIsRestarting] = useState(false);
-  const [syncTrigger, setSyncTrigger] = useState(0);
 
   const threadRef = useRef<HTMLDivElement>(null);
 
@@ -581,7 +580,24 @@ function ConversationInner() {
       if (agentErr) console.error('Error fetching agent:', agentErr);
       if (agentData) setAgent(agentData);
 
-      // 2. Fetch Messages
+      // 2. Fetch Active Run (Unified Recovery)
+      if (agentData && (agentData.status === 'running' || agentData.status === 'waiting_for_human')) {
+        const { data: runData } = await supabase.from('agent_runs')
+          .select('id')
+          .eq('agent_id', agentId)
+          .in('status', ['running', 'waiting_for_human'])
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (runData && activeRunId !== 'starting') {
+          setActiveRunId(runData.id);
+        }
+      } else if (agentData && agentData.status !== 'running' && agentData.status !== 'waiting_for_human' && activeRunId !== 'starting') {
+        setActiveRunId(null);
+      }
+
+      // 3. Fetch Messages
       const { data: msgData, error: msgErr } = await supabase.from('agent_conversations')
         .select('*')
         .eq('agent_id', agentId)
@@ -599,48 +615,14 @@ function ConversationInner() {
           return merged.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
         });
       }
-
-      // 3. Status Check for Header Sync
-      if (agentData?.status === 'running' && !activeRunId) {
-        console.log('[Sync] Agent is running in DB but no activeRunId in state. Triggering recovery...');
-      }
     }
 
     fetchData();
     const interval = setInterval(fetchData, 3000);
     return () => clearInterval(interval);
-  }, [agentId, activeRunId]);
+  }, [agentId, activeRunId === 'starting']);
 
-  // Dedicated Run Recovery Effect (Stable)
-  useEffect(() => {
-    async function recoverActiveRun() {
-      if (activeRunId && activeRunId !== 'starting') return;
-
-      console.log('[Sync] Searching for active runs for agent:', agentId);
-      const { data: activeRunData, error } = await supabase
-        .from('agent_runs')
-        .select('id, status')
-        .eq('agent_id', agentId)
-        .in('status', ['running', 'waiting_for_human'])
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      if (error) {
-        console.error('[Sync] Recovery error:', error);
-        return;
-      }
-
-      if (activeRunData) {
-        console.log('[Sync] Active run recovered:', activeRunData.id);
-        setActiveRunId(activeRunData.id);
-      } else {
-        console.log('[Sync] No active runs found in database.');
-      }
-    }
-
-    recoverActiveRun();
-  }, [agentId, syncTrigger, agent?.status]);
+  // Debug Logging State Transitions
 
   // Debug Logging State Transitions
   useEffect(() => {
@@ -919,7 +901,6 @@ function ConversationInner() {
               <button 
                 onClick={() => {
                   setShowRunConfirm(false);
-                  setSyncTrigger(prev => prev + 1);
                 }}
                 style={{
                   padding: '12px', background: '#F7F6F3', border: '1px solid #D4CFC6', borderRadius: '8px',
