@@ -322,22 +322,6 @@ const LiveRunWidget = ({ runId, agentId, onComplete }: { runId: string, agentId:
   const [steps, setSteps] = useState<any[]>([]);
   const [resumeLoading, setResumeLoading] = useState(false);
 
-  // Scroll into view on first mount
-  useEffect(() => {
-    setTimeout(() => {
-      document.getElementById('live-run-widget')?.scrollIntoView({ behavior: 'smooth', block: 'end' });
-    }, 150);
-  }, []);
-
-  // Also scroll when data arrives (widget expands)
-  useEffect(() => {
-    if (run || steps.length > 0) {
-      setTimeout(() => {
-        document.getElementById('live-run-widget')?.scrollIntoView({ behavior: 'smooth', block: 'end' });
-      }, 100);
-    }
-  }, [run?.status, steps.length]);
-
   useEffect(() => {
     async function poll() {
       if (runId === 'starting') return;
@@ -671,11 +655,6 @@ function ConversationInner() {
     }
   }, [autorun, agent, activeRunId, autorunAttempted]);
 
-  // Auto-scroll
-  const bottomRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages.length, activeRunId]);
 
   const handleSendMessage = async () => {
     if (!inputValue.trim() || isSending) return;
@@ -817,10 +796,17 @@ function ConversationInner() {
       );
     }
 
-    elements.push(<div key="bottom" ref={bottomRef} />);
+    elements.push(<div key="bottom" style={{ height: '1px' }} />);
 
     return elements;
   }, [messages, activeRunId, agentId, expandedRuns]);
+
+  // Scroll to bottom on new messages or when a run starts/changes
+  useEffect(() => {
+    if (threadRef.current) {
+      threadRef.current.scrollTop = threadRef.current.scrollHeight;
+    }
+  }, [messages.length, activeRunId]);
 
   return (
     <div style={{
