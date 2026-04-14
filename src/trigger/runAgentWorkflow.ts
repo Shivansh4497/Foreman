@@ -168,13 +168,25 @@ export const runAgentWorkflow = task({
         logger.info(`Suspending execution at Manual Review step (Step: ${step.step_number})`);
         
         stepStatuses[step.step_number.toString()] = "waiting_for_human";
-        await supabase
+
+        // Race guard: only transition to waiting_for_human if still running.
+        // If the run was cancelled between the isCancelled() check above and here,
+        // this update becomes a no-op and we return without corrupting the cancelled state.
+        const { data: suspendedRun } = await supabase
           .from('agent_runs')
           .update({ 
             status: 'waiting_for_human',
             global_state: { ...globalState, step_statuses: stepStatuses } 
           })
-          .eq('id', run.id);
+          .eq('id', run.id)
+          .eq('status', 'running')  // ← guard: no-op if cancelled between check and here
+          .select('id')
+          .single();
+
+        if (!suspendedRun) {
+          logger.warn(`Run ${run.id} was not in 'running' state at manual review transition — likely cancelled. Exiting.`);
+          return;
+        }
 
         logger.info("Task cleanly suspended awaiting human intervention.");
         return { message: "Suspended for manual review", step: step.step_number };
@@ -243,13 +255,16 @@ Perform the objective now. Output ONLY what is requested in the OUT FORMAT. Do n
       } catch (err) {
         logger.error(`Execution failed at step ${step.step_number}`, { err });
         stepStatuses[step.step_number.toString()] = "failed";
+        // Race guard: only write failed status if run was not already cancelled.
+        // Avoids overwriting a cancelled run with a late failure from a long-running LLM call.
         await supabase
           .from('agent_runs')
           .update({ 
             status: 'failed',
             global_state: { ...globalState, step_statuses: stepStatuses } 
           })
-          .eq('id', run.id);
+          .eq('id', run.id)
+          .eq('status', 'running');  // ← guard: no-op if cancelled
         throw err;
       }
     }
@@ -364,13 +379,15 @@ async function failRun(runId: string, errorReason: string, agentId: string, user
   const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
+  // Race guard: only mark as failed if run is still active (not already cancelled)
   await supabase
     .from('agent_runs')
     .update({ 
       status: 'failed', 
       global_state: { error: errorReason }
     })
-    .eq('id', runId);
+    .eq('id', runId)
+    .eq('status', 'running');  // ← no-op if run was cancelled before this helper fires
 
   // Insert failed run_card
   try {

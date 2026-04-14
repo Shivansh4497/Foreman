@@ -32,7 +32,14 @@ export async function POST(request: Request) {
     const result = await startAgentRun(serviceClient, agent_id, user.id, !!force);
 
     if (!result.success) {
-      return NextResponse.json({ error: result.error }, { status: result.error?.includes('not found') ? 404 : 500 });
+      // Map stable error codes to correct HTTP statuses
+      if (result.code === 'ACTIVE_RUN_EXISTS') {
+        return NextResponse.json({ error: result.error || result.message, run_id: result.run_id }, { status: 409 });
+      }
+      if (result.code === 'AGENT_NOT_FOUND' || result.error?.includes('not found')) {
+        return NextResponse.json({ error: result.error }, { status: 404 });
+      }
+      return NextResponse.json({ error: result.error }, { status: 500 });
     }
 
     return NextResponse.json({ 

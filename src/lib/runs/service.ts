@@ -8,6 +8,8 @@ export interface StartRunResult {
   run_number?: number;
   message?: string;
   error?: string;
+  /** Stable machine-readable code for callers to map to HTTP status without string matching. */
+  code?: 'ACTIVE_RUN_EXISTS' | 'AGENT_NOT_FOUND' | 'TRIGGER_FAILED' | 'UNKNOWN_ERROR';
 }
 
 /**
@@ -104,7 +106,8 @@ export async function startAgentRun(
       if (existingRun) {
         console.log(`[startAgentRun] Agent ${agentId} already has active run ${existingRun.id}`);
         return {
-          success: true,
+          success: false,                     // treat as blocking conflict at API layer
+          code: 'ACTIVE_RUN_EXISTS',
           message: 'Agent is already running',
           run_id: existingRun.id
         };
@@ -130,7 +133,7 @@ export async function startAgentRun(
       if (runErr?.code === '23505') {
         // Partial unique index blocked a duplicate active run — expected under concurrent requests
         console.warn(`[startAgentRun] Unique index blocked duplicate active run for agent ${agentId}`);
-        return { success: false, error: 'A run is already in progress for this agent.' };
+        return { success: false, code: 'ACTIVE_RUN_EXISTS', error: 'A run is already in progress for this agent.' };
       }
       console.error(`[startAgentRun] Failed to insert run record:`, runErr?.message);
       return { success: false, error: `Failed to create run record: ${runErr?.message}` };

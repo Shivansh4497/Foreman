@@ -127,7 +127,8 @@ export async function POST(request: Request) {
     } else if (classifiedIntent === 'RUN_TRIGGER' || content.toLowerCase().includes('run now')) {
       const result = await startAgentRun(supabase, agent_id, user.id);
 
-      if (result.message === 'Agent is already running') {
+      // Use stable code field (not fragile string match) to detect already-active run
+      if (result.code === 'ACTIVE_RUN_EXISTS') {
         await supabase.from('agent_conversations').insert({
           agent_id,
           user_id: user.id,
