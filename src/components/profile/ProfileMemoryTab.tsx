@@ -5,12 +5,12 @@ interface ProfileMemoryTabProps {
 }
 
 export default function ProfileMemoryTab({ memory }: ProfileMemoryTabProps) {
-  const lines = (memory || '')
+  const memoryLines = (memory || '')
     .split('\n')
     .map((l: string) => l.replace(/^\[\d{4}-\d{2}-\d{2}\]\s*/, '').trim())
     .filter((l: string) => l.length > 0);
 
-  if (lines.length === 0) {
+  if (memoryLines.length === 0) {
     return (
       <div style={{
         fontSize: '12px',
@@ -25,8 +25,8 @@ export default function ProfileMemoryTab({ memory }: ProfileMemoryTabProps) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column' }}>
-      {lines.map((line, idx) => (
-        <div key={idx} style={{
+      {memoryLines.map((line, i) => (
+        <div key={i} style={{
           background: '#F7F6F3',
           border: '1px solid #D4CFC6',
           borderRadius: '8px',

@@ -572,6 +572,11 @@ function ConversationInner() {
 
   const threadRef = useRef<HTMLDivElement>(null);
 
+  const activeRunIdRef = useRef(activeRunId);
+  useEffect(() => {
+    activeRunIdRef.current = activeRunId;
+  }, [activeRunId]);
+
   // Initial Fetch & Polling
   useEffect(() => {
     async function fetchData() {
@@ -590,10 +595,13 @@ function ConversationInner() {
           .limit(1)
           .maybeSingle();
 
-        if (runData && activeRunId !== 'starting') {
+        if (runData && activeRunIdRef.current !== 'starting') {
           setActiveRunId(runData.id);
         }
-      } else if (agentData && agentData.status !== 'running' && agentData.status !== 'waiting_for_human' && activeRunId !== 'starting') {
+      } else if (agentData && agentData.status !== 'running' && agentData.status !== 'waiting_for_human' && activeRunIdRef.current !== 'starting') {
+        if (activeRunIdRef.current !== null) {
+          console.log('[Sync] Clearing activeRunId because agent is inactive. Agent status:', agentData.status);
+        }
         setActiveRunId(null);
       }
 
@@ -623,7 +631,7 @@ function ConversationInner() {
     fetchData();
     const interval = setInterval(fetchData, 3000);
     return () => clearInterval(interval);
-  }, [agentId, activeRunId === 'starting']);
+  }, [agentId]);
 
   // Debug Logging State Transitions
 
@@ -714,11 +722,12 @@ function ConversationInner() {
       if (res.ok) {
         setActiveRunId(data.run_id);
       } else {
+        console.error('[handleRunNow] API failed', data);
         alert(data.error || 'Failed to start run');
         setActiveRunId(null);
       }
     } catch (e) { 
-      console.error(e); 
+      console.error('[handleRunNow] Exception:', e); 
       setActiveRunId(null);
     }
   };
