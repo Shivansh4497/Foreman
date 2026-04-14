@@ -27,22 +27,23 @@ export const runAgentWorkflow = task({
     }
 
     // 1.1 Atomic Claim (Idempotency Guard)
-    // Only proceed if we can transition from 'pending' to 'running'
-    // If it's already 'running' (e.g. from a previous trigger), we exit to avoid duplicate work.
+    // Transition from 'pending' -> 'running' atomically.
+    // If the run was already claimed (e.g. a duplicate Trigger.dev invocation),
+    // the conditional update will find 0 rows and we exit safely.
     const { data: claimedRun, error: claimErr } = await supabase
       .from('agent_runs')
       .update({ status: 'running' })
       .eq('id', payload.run_id)
-      .eq('status', 'pending')
+      .eq('status', 'pending')   // ← only succeeds if still pending
       .select()
       .single();
 
     if (claimErr || !claimedRun) {
-      logger.warn(`Run ${payload.run_id} could not be claimed (status: ${run.status}). Possible duplicate trigger. Exiting.`);
+      logger.warn(`Run ${payload.run_id} could not be claimed (current status: ${run.status}). Possible duplicate trigger — exiting safely.`);
       return;
     }
     
-    logger.info(`Run ${payload.run_id} claimed successfully.`);
+    logger.info(`Run ${payload.run_id} claimed successfully (run #${run.run_number}).`);
 
     const { data: llmConfig, error: configErr } = await supabase
       .from('user_llm_config')
@@ -52,7 +53,7 @@ export const runAgentWorkflow = task({
 
     if (configErr || !llmConfig) {
       logger.error("User LLM config not found or failed to fetch", { errorMessage: configErr?.message });
-      await failRun(payload.run_id, "Missing LLM configuration for user", run.agent_id, run.user_id);
+      await failRun(payload.run_id, "Missing LLM configuration for user", run.agent_id, run.user_id, run.run_number);
       return;
     }
 
@@ -62,7 +63,7 @@ export const runAgentWorkflow = task({
 
     if (rpcErr || !apiKey) {
       logger.error("Failed to decrypt API key via Vault RPC", { errorMessage: rpcErr?.message });
-      await failRun(payload.run_id, "Failed to unlock provider API key via Vault", run.agent_id, run.user_id);
+      await failRun(payload.run_id, "Failed to unlock provider API key via Vault", run.agent_id, run.user_id, run.run_number);
       return;
     }
     logger.info("Secret retrieved successfully via RPC");
@@ -72,11 +73,11 @@ export const runAgentWorkflow = task({
     const stepStatuses = globalState.step_statuses || {};
     let currentStepNumber = globalState.current_step || 1;
 
-    // --- Step 2: Checkpoint Feedback Capture ---
+    // --- Checkpoint Feedback Capture ---
     const processedFeedback = globalState.processed_feedback || [];
     let feedbackModified = false;
 
-    // Heartbeat check
+    // Cancellation check before feedback processing
     if (await isCancelled(run.id, supabase)) {
       logger.info("Run cancelled, aborting feedback processing");
       return;
@@ -115,14 +116,18 @@ export const runAgentWorkflow = task({
 
     if (feedbackModified) {
       globalState.processed_feedback = processedFeedback;
-      await supabase
-        .from('agent_runs')
-        .update({ global_state: globalState })
-        .eq('id', run.id);
+      // Only persist if not cancelled
+      if (!(await isCancelled(run.id, supabase))) {
+        await supabase
+          .from('agent_runs')
+          .update({ global_state: globalState })
+          .eq('id', run.id)
+          .eq('status', 'running');  // guard: skip if somehow cancelled between checks
+      }
     }
-    // --- End Step 2 ---
+    // --- End Feedback Capture ---
 
-    // 2. Load Agent Steps
+    // 3. Load Agent Steps
     const { data: steps, error: stepsErr } = await supabase
       .from('agent_steps')
       .select('*')
@@ -131,7 +136,7 @@ export const runAgentWorkflow = task({
 
     if (stepsErr || !steps || steps.length === 0) {
       logger.error("Steps not found", { errorMessage: stepsErr?.message });
-      await failRun(payload.run_id, "Agent has no steps defined", run.agent_id, run.user_id);
+      await failRun(payload.run_id, "Agent has no steps defined", run.agent_id, run.user_id, run.run_number);
       return;
     }
 
@@ -139,7 +144,7 @@ export const runAgentWorkflow = task({
     const targetSteps = steps.filter(s => s.step_number >= currentStepNumber);
 
     for (const step of targetSteps) {
-      // Periodic cancellation check
+      // Periodic cancellation check before each step
       if (await isCancelled(run.id, supabase)) {
         logger.info("Run cancelled by user, aborting execution loop");
         return;
@@ -148,20 +153,20 @@ export const runAgentWorkflow = task({
       globalState.current_step = step.step_number;
       stepStatuses[step.step_number.toString()] = "running";
       
-      // Persist that step has started
+      // Persist step-started state — conditioned on run still being active
       await supabase
         .from('agent_runs')
         .update({ 
           status: 'running', 
           global_state: { ...globalState, step_statuses: stepStatuses } 
         })
-        .eq('id', run.id);
+        .eq('id', run.id)
+        .eq('status', 'running');  // guard: no-op if cancelled
 
-      // Handle Component Types
+      // Handle Manual Review steps
       if (step.step_type === 'manual_review') {
         logger.info(`Suspending execution at Manual Review step (Step: ${step.step_number})`);
         
-        // Let frontend polling know it's paused.
         stepStatuses[step.step_number.toString()] = "waiting_for_human";
         await supabase
           .from('agent_runs')
@@ -171,7 +176,6 @@ export const runAgentWorkflow = task({
           })
           .eq('id', run.id);
 
-        // Terminate trigger job safely. It will resume later as a new payload
         logger.info("Task cleanly suspended awaiting human intervention.");
         return { message: "Suspended for manual review", step: step.step_number };
       }
@@ -234,7 +238,6 @@ Perform the objective now. Output ONLY what is requested in the OUT FORMAT. Do n
           userTurn: `EXECUTE STEP ${step.step_number}: ${step.objective}${userFeedbackInjection}`,
         });
 
-        // Write output locally into global_state notepad
         globalState[`step_${step.step_number}_output`] = output;
         stepStatuses[step.step_number.toString()] = "completed";
       } catch (err) {
@@ -251,17 +254,15 @@ Perform the objective now. Output ONLY what is requested in the OUT FORMAT. Do n
       }
     }
 
-    // --- Step 1: Run Completion Summary ---
+    // --- Run Completion Summary (memory) ---
     try {
       if (await isCancelled(run.id, supabase)) return;
       logger.info("About to write memory summary");
       
-      // Prune and truncate state to avoid context explosion/Rate Limit payload limits (6000 TPM on Groq free)
       const summaryContext = Object.keys(globalState)
         .filter(k => k.endsWith('_output') || k.includes('_feedback'))
         .reduce((obj, key) => {
           const val = globalState[key];
-          // Truncate individual strings to 300 chars to keep total payload strictly under TPM limits
           obj[key] = (typeof val === 'string' && val.length > 300) 
             ? val.substring(0, 300) + "... [truncated]" 
             : val;
@@ -282,9 +283,9 @@ Perform the objective now. Output ONLY what is requested in the OUT FORMAT. Do n
     } catch (err) {
       logger.error("Failed to generate run completion summary", { err: err instanceof Error ? err.message : String(err) });
     }
-    // --- End Step 1 ---
+    // --- End Completion Summary ---
 
-    // 4. Job Complete
+    // 4. Final cancellation check before marking complete
     if (await isCancelled(run.id, supabase)) return;
 
     await supabase
@@ -294,7 +295,8 @@ Perform the objective now. Output ONLY what is requested in the OUT FORMAT. Do n
         global_state: { ...globalState, step_statuses: stepStatuses, current_step: null },
         completed_at: new Date().toISOString()
       })
-      .eq('id', run.id);
+      .eq('id', run.id)
+      .eq('status', 'running');  // guard: no-op if cancelled between last check and now
 
     // Increment Agent total_runs stat safely
     const { data: currentAgent } = await supabase.from('agents').select('total_runs').eq('id', run.agent_id).single();
@@ -302,15 +304,10 @@ Perform the objective now. Output ONLY what is requested in the OUT FORMAT. Do n
       await supabase.from('agents').update({ total_runs: (currentAgent.total_runs || 0) + 1 }).eq('id', run.agent_id);
     }
 
-    // Insert run_card message into agent_conversations
+    // Post run_card to agent_conversations
     try {
       const lastStepNumber = steps[steps.length - 1].step_number;
       const finalOutput = globalState[`step_${lastStepNumber}_output`] || '';
-      
-      const { count } = await supabase
-        .from('agent_runs')
-        .select('*', { count: 'exact', head: true })
-        .eq('agent_id', run.agent_id);
       
       const stepsArray = steps.map(s => ({
         step_number: s.step_number,
@@ -324,6 +321,7 @@ Perform the objective now. Output ONLY what is requested in the OUT FORMAT. Do n
         (Date.now() - new Date(run.created_at).getTime()) / 1000
       );
 
+      // Use run.run_number from the DB — authoritative, set at insert time by trigger
       const { error: insertErr } = await supabase.from('agent_conversations').insert({
         agent_id: run.agent_id,
         user_id: run.user_id,
@@ -332,7 +330,7 @@ Perform the objective now. Output ONLY what is requested in the OUT FORMAT. Do n
         message_type: 'run_card',
         content: String(finalOutput).substring(0, 120) + (String(finalOutput).length > 120 ? '...' : ''),
         metadata: {
-          run_number: count || 0,
+          run_number: run.run_number,  // ← DB-authoritative, not a live count()
           status: 'completed',
           step_count: steps.length,
           duration_seconds: durationSeconds,
@@ -355,13 +353,13 @@ Perform the objective now. Output ONLY what is requested in the OUT FORMAT. Do n
       logger.error("Exception in run_card posting logic", { error: err.message });
     }
 
-    logger.info(`Run successfully finished.`);
+    logger.info(`Run ${payload.run_id} successfully finished (#${run.run_number}).`);
     return { success: true };
   }
 });
 
 // Helper Function
-async function failRun(runId: string, errorReason: string, agentId: string, userId: string) {
+async function failRun(runId: string, errorReason: string, agentId: string, userId: string, runNumber: number) {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
   const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
@@ -376,11 +374,6 @@ async function failRun(runId: string, errorReason: string, agentId: string, user
 
   // Insert failed run_card
   try {
-    const { count } = await supabase
-      .from('agent_runs')
-      .select('*', { count: 'exact', head: true })
-      .eq('agent_id', agentId);
-
     const { error: insertErr } = await supabase.from('agent_conversations').insert({
       agent_id: agentId,
       user_id: userId,
@@ -391,7 +384,7 @@ async function failRun(runId: string, errorReason: string, agentId: string, user
       metadata: { 
         status: 'failed', 
         error: errorReason, 
-        run_number: count || 0,
+        run_number: runNumber,  // ← passed in from caller, not a live count()
         step_count: 0 
       }
     });

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { callLLM } from '@/lib/llm';
-import { tasks } from '@trigger.dev/sdk/v3';
+import { startAgentRun } from '@/lib/runs/service';
 
 export async function POST(req: NextRequest) {
   const authHeader = req.headers.get('Authorization');
@@ -14,7 +14,7 @@ export async function POST(req: NextRequest) {
   const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-  // Get user from token
+  // Verify user
   const { data: { user }, error: userErr } = await supabase.auth.getUser(token);
   if (userErr || !user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -27,7 +27,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'run_id and feedback are required' }, { status: 400 });
     }
 
-    // 1. Fetch run from agent_runs — must belong to this user, status must be 'completed'
+    // 1. Fetch run — must belong to this user, status must be 'completed'
     const { data: run, error: runErr } = await supabase
       .from('agent_runs')
       .select('*, agents(agent_memory)')
@@ -40,7 +40,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Run not found or not eligible for rejection' }, { status: 404 });
     }
 
-    // 2. Fetch user_llm_config for user.id
+    // 2. Fetch LLM config
     const { data: llmConfig, error: configErr } = await supabase
       .from('user_llm_config')
       .select('provider, model, vault_secret_id')
@@ -59,7 +59,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Failed to decrypt API key' }, { status: 500 });
     }
 
-    // 4. Call LLM to generate a memory instruction
+    // 4. Distill feedback into a memory instruction via LLM
     const memoryInstruction = await callLLM({
       provider: llmConfig.provider,
       model: llmConfig.model,
@@ -72,7 +72,7 @@ export async function POST(req: NextRequest) {
     const memoryEntry = `[${date}] Rejection feedback: ${memoryInstruction}`;
 
     // 5. Update agents.agent_memory (prepend and trim to 2000 chars)
-    let currentMemory = run.agents.agent_memory || "";
+    let currentMemory = run.agents.agent_memory || '';
     let updatedMemory = `${memoryEntry}\n${currentMemory}`;
     if (updatedMemory.length > 2000) {
       updatedMemory = updatedMemory.substring(0, 2000);
@@ -80,45 +80,34 @@ export async function POST(req: NextRequest) {
 
     const { error: updateErr } = await supabase
       .from('agents')
-      .update({ agent_memory: updatedMemory, status: 'running' })
+      .update({ agent_memory: updatedMemory })
       .eq('id', run.agent_id);
 
     if (updateErr) {
+      console.error('[runs/reject] Failed to update agent memory:', updateErr.message);
       return NextResponse.json({ error: 'Failed to update agent memory' }, { status: 500 });
     }
 
-    // 6. Insert new agent_runs record
-    const { data: newRun, error: insertErr } = await supabase
-      .from('agent_runs')
-      .insert({
-        agent_id: run.agent_id,
-        user_id: user.id,
-        status: 'running',
-        global_state: { 
-          current_step: 1, 
-          step_statuses: {}, 
-          rejection_context: feedback 
-        },
-        created_at: new Date().toISOString()
-      })
-      .select()
-      .single();
+    // 6. Start new run via unified service (enforces uniqueness + persists trigger_task_id)
+    //    Use force=true so any stale active run is cancelled before starting fresh.
+    const result = await startAgentRun(supabase, run.agent_id, user.id, /* force= */ true);
 
-    if (insertErr || !newRun) {
-      return NextResponse.json({ error: 'Failed to create new run record' }, { status: 500 });
+    if (!result.success) {
+      console.error('[runs/reject] startAgentRun failed:', result.error);
+      return NextResponse.json({ error: result.error || 'Failed to start new run' }, { status: 500 });
     }
 
-    // 7. Trigger Trigger.dev job
-    await tasks.trigger('run-agent-workflow', { run_id: newRun.id });
+    console.log(`[runs/reject] Started new run ${result.run_id} (#${result.run_number}) after rejection`);
 
-    return NextResponse.json({ 
-      success: true, 
-      new_run_id: newRun.id, 
-      memory_updated: memoryEntry 
+    return NextResponse.json({
+      success: true,
+      new_run_id: result.run_id,
+      run_number: result.run_number,
+      memory_updated: memoryEntry
     });
 
   } catch (error) {
-    console.error('Rejection error:', error);
+    console.error('[runs/reject] Unexpected error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

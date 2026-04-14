@@ -13,6 +13,13 @@ export interface StartRunResult {
 /**
  * Unified service to start an agent run.
  * Handles concurrency, force-cancellation, run record creation, and workflow triggering.
+ *
+ * Concurrency guarantees:
+ * - The DB partial unique index (idx_one_active_run_per_agent) is the final arbiter.
+ *   If two concurrent requests both pass the application-level check, only one INSERT
+ *   will succeed; the other receives a 23505 unique-violation and returns a clean error.
+ * - Force-cancel only updates rows that are still in an active state (pending/running/
+ *   waiting_for_human), preventing accidental updates to completed/failed rows.
  */
 export async function startAgentRun(
   supabase: SupabaseClient,
@@ -20,8 +27,10 @@ export async function startAgentRun(
   userId: string,
   force: boolean = false
 ): Promise<StartRunResult> {
+  const ACTIVE_STATUSES = ['pending', 'running', 'waiting_for_human'] as const;
+
   try {
-    // 1. Verify agent and check current state
+    // 1. Verify agent exists and belongs to user
     const { data: agent, error: agentErr } = await supabase
       .from('agents')
       .select('id, status')
@@ -30,33 +39,46 @@ export async function startAgentRun(
       .maybeSingle();
 
     if (agentErr || !agent) {
+      console.error(`[startAgentRun] Agent not found: agentId=${agentId} userId=${userId}`);
       return { success: false, error: 'Agent not found or access denied' };
     }
 
-    // 2. Handle Force Cancel
+    // 2. Handle Force Cancel — cancel all currently active runs for this agent
     if (force) {
       const { data: activeRuns } = await supabase
         .from('agent_runs')
         .select('id, trigger_task_id')
         .eq('agent_id', agentId)
-        .in('status', ['pending', 'running', 'waiting_for_human']);
+        .in('status', ACTIVE_STATUSES);
 
       if (activeRuns && activeRuns.length > 0) {
         for (const run of activeRuns) {
-          // Cancel on Trigger.dev if we have a task ID
+          // Attempt Trigger.dev cancellation if we have a task ID
           if (run.trigger_task_id) {
             try {
               await runs.cancel(run.trigger_task_id);
+              console.log(`[startAgentRun] Cancelled Trigger task ${run.trigger_task_id} for run ${run.id}`);
             } catch (err) {
-              console.error(`[startAgentRun] Failed to cancel Trigger task ${run.trigger_task_id}:`, err);
+              // Non-fatal: task may have already finished; continue to mark DB cancelled
+              console.error(`[startAgentRun] Failed to cancel Trigger task ${run.trigger_task_id} (may already be done):`, err);
             }
+          } else {
+            console.warn(`[startAgentRun] Run ${run.id} has no trigger_task_id; skipping remote cancel`);
           }
 
-          // Mark DB as cancelled
-          await supabase
+          // Conditionally mark DB as cancelled — only if still in an active state
+          // (guards against race where the run completed between the SELECT and this UPDATE)
+          const { error: cancelErr } = await supabase
             .from('agent_runs')
             .update({ status: 'cancelled' })
-            .eq('id', run.id);
+            .eq('id', run.id)
+            .in('status', ACTIVE_STATUSES);  // ← atomic guard
+
+          if (cancelErr) {
+            console.error(`[startAgentRun] Failed to mark run ${run.id} as cancelled:`, cancelErr.message);
+          } else {
+            console.log(`[startAgentRun] Marked run ${run.id} as cancelled`);
+          }
 
           // Post cancellation card to chat
           await supabase.from('agent_conversations').insert({
@@ -66,81 +88,84 @@ export async function startAgentRun(
             role: 'agent',
             message_type: 'run_card',
             content: 'Run cancelled by user',
-            metadata: { status: 'cancelled', run_number: 0, cancelled_by_user: true }
+            metadata: { status: 'cancelled', cancelled_by_user: true }
           });
         }
       }
     } else {
-      // Concurrency Check (Non-force)
+      // Non-force: concurrency check — return early if a run is already active
       const { data: existingRun } = await supabase
         .from('agent_runs')
         .select('id')
         .eq('agent_id', agentId)
-        .in('status', ['pending', 'running', 'waiting_for_human'])
+        .in('status', ACTIVE_STATUSES)
         .maybeSingle();
 
       if (existingRun) {
-        return { 
-          success: true, 
-          message: 'Agent is already running', 
-          run_id: existingRun.id 
+        console.log(`[startAgentRun] Agent ${agentId} already has active run ${existingRun.id}`);
+        return {
+          success: true,
+          message: 'Agent is already running',
+          run_id: existingRun.id
         };
       }
     }
 
-    // 3. Calculate accurate run number
-    const { count } = await supabase
-      .from('agent_runs')
-      .select('*', { count: 'exact', head: true })
-      .eq('agent_id', agentId);
-    const nextRunNumber = (count || 0) + 1;
-
-    // 4. Create run record
+    // 3. Create run record.
+    //    run_number is intentionally omitted from the INSERT payload — the DB BEFORE INSERT
+    //    trigger (trg_set_run_number) computes the correct value atomically, removing any
+    //    off-by-one risk from application-level COUNT queries.
     const { data: newRun, error: runErr } = await supabase
       .from('agent_runs')
       .insert({
         agent_id: agentId,
         user_id: userId,
-        status: 'pending', // Use 'pending' initially, worker will claim it as 'running'
-        run_number: nextRunNumber,
+        status: 'pending', // Worker will atomically claim it as 'running' via eq('status','pending')
         global_state: { current_step: 1, step_statuses: {} },
       })
       .select('id, run_number')
       .single();
 
     if (runErr || !newRun) {
-      // This might fail if the partial unique index blocks it (race condition)
       if (runErr?.code === '23505') {
+        // Partial unique index blocked a duplicate active run — expected under concurrent requests
+        console.warn(`[startAgentRun] Unique index blocked duplicate active run for agent ${agentId}`);
         return { success: false, error: 'A run is already in progress for this agent.' };
       }
+      console.error(`[startAgentRun] Failed to insert run record:`, runErr?.message);
       return { success: false, error: `Failed to create run record: ${runErr?.message}` };
     }
 
-    // 5. Trigger workflow via Trigger.dev
+    console.log(`[startAgentRun] Created run ${newRun.id} (#${newRun.run_number}) for agent ${agentId}`);
+
+    // 4. Trigger workflow via Trigger.dev
     try {
       const trigger = await tasks.trigger<typeof runAgentWorkflow>('run-agent-workflow', {
         run_id: newRun.id,
       });
 
-      // Update agent status AND store the task ID
-      await supabase
-        .from('agents')
-        .update({ status: 'running' })
-        .eq('id', agentId);
+      console.log(`[startAgentRun] Triggered Trigger.dev task ${trigger.id} for run ${newRun.id}`);
 
-      await supabase
-        .from('agent_runs')
-        .update({ trigger_task_id: trigger.id })
-        .eq('id', newRun.id);
+      // Persist trigger task ID and update agent status in parallel
+      await Promise.all([
+        supabase
+          .from('agent_runs')
+          .update({ trigger_task_id: trigger.id })
+          .eq('id', newRun.id),
+        supabase
+          .from('agents')
+          .update({ status: 'running' })
+          .eq('id', agentId),
+      ]);
 
       return {
         success: true,
         run_id: newRun.id,
-        run_number: newRun.run_number
+        run_number: newRun.run_number,  // DB-authoritative value
       };
     } catch (triggerErr: any) {
       console.error(`[startAgentRun] Trigger.dev failure: ${triggerErr.message}`);
-      // Cleanup the failed run record
+      // Clean up the orphaned pending run so the partial unique index stays clear
       await supabase.from('agent_runs').delete().eq('id', newRun.id);
       return { success: false, error: `Background worker failed to start: ${triggerErr.message}` };
     }

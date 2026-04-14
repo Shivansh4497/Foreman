@@ -43,34 +43,47 @@ export async function POST(request: Request) {
     }
 
     if (run.status !== 'waiting_for_human') {
+      console.warn(`[runs/resume] Run ${run_id} is in status '${run.status}', not 'waiting_for_human'. Possible duplicate resume.`);
       return NextResponse.json({ error: 'Run is not awaiting human review' }, { status: 400 });
     }
 
-    // Inject human feedback into the global_state notepad, and mark current step as completed.
+    // Inject human feedback into global_state and advance step counter
     const state = run.global_state || {};
     const stepStatuses = state.step_statuses || {};
     const currentStep = state.current_step;
-    
+
     if (currentStep) {
-      stepStatuses[currentStep.toString()] = "completed";
+      stepStatuses[currentStep.toString()] = 'completed';
       if (human_feedback) {
         state[`step_${currentStep}_human_feedback`] = human_feedback;
       }
-      
-      // Increment step internally for the engine boundary so it knows to skip.
+      // Advance step pointer so the worker skips the already-reviewed step
       state.current_step = currentStep + 1;
     }
 
-    // Unpause in DB
-    await serviceClient
+    // Atomic transition: waiting_for_human → pending
+    // Only succeeds if status is still 'waiting_for_human'; concurrent resume clicks
+    // will see 0 rows updated and should be treated as duplicates.
+    const { data: updatedRun, error: updateErr } = await serviceClient
       .from('agent_runs')
       .update({
-        status: 'pending', // Task marks it running immediately
+        status: 'pending', // Worker will atomically claim it as 'running' via eq('status','pending')
         global_state: { ...state, step_statuses: stepStatuses }
       })
-      .eq('id', run_id);
+      .eq('id', run_id)
+      .eq('status', 'waiting_for_human')  // ← atomic guard against double-resume
+      .select('id')
+      .single();
 
-    // Awaken Trigger pipeline identically
+    if (updateErr || !updatedRun) {
+      // Another request already transitioned this run; return 409 to signal duplicate
+      console.warn(`[runs/resume] Run ${run_id} could not be transitioned (already resumed or concurrent request). updateErr: ${updateErr?.message}`);
+      return NextResponse.json({ error: 'Run has already been resumed or is no longer waiting' }, { status: 409 });
+    }
+
+    console.log(`[runs/resume] Run ${run_id} transitioned to pending. Triggering worker.`);
+
+    // Trigger worker and persist task ID
     const trigger = await tasks.trigger<typeof runAgentWorkflow>('run-agent-workflow', {
       run_id: run.id,
     });
@@ -79,6 +92,8 @@ export async function POST(request: Request) {
       .from('agent_runs')
       .update({ trigger_task_id: trigger.id })
       .eq('id', run_id);
+
+    console.log(`[runs/resume] Trigger.dev task ${trigger.id} issued for run ${run_id}`);
 
     return NextResponse.json({ success: true, run_id: run.id });
 
