@@ -691,15 +691,20 @@ function ConversationInner() {
         const { data: runData } = await supabase.from('agent_runs')
           .select('id')
           .eq('agent_id', agentId)
-          .in('status', ['pending', 'running', 'waiting_for_human'])
+          .in('status', ['running', 'waiting_for_human'])
           .order('created_at', { ascending: false })
           .limit(1)
           .maybeSingle();
 
         if (runData && activeRunIdRef.current !== 'starting') {
+          // Found an active run — show the widget
           setActiveRunId(runData.id);
+        } else if (!runData && activeRunIdRef.current !== 'starting') {
+          // agents.status is stale — no active run exists
+          // Clear widget so thread shows correctly
+          setActiveRunId(null);
         }
-      } else if (agentData && agentData.status !== 'running' && agentData.status !== 'waiting_for_human' && activeRunIdRef.current !== 'starting') {
+      } else if (agentData && activeRunIdRef.current !== 'starting') {
         setActiveRunId(null);
       }
 

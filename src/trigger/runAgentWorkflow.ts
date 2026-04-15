@@ -317,6 +317,10 @@ Perform the objective now. Output ONLY what is requested in the OUT FORMAT. Do n
     const { data: currentAgent } = await supabase.from('agents').select('total_runs').eq('id', run.agent_id).single();
     if (currentAgent) {
       await supabase.from('agents').update({ total_runs: (currentAgent.total_runs || 0) + 1 }).eq('id', run.agent_id);
+      await supabase
+        .from('agents')
+        .update({ status: 'active' })
+        .eq('id', run.agent_id);
     }
 
     // Post run_card to agent_conversations
@@ -389,6 +393,11 @@ async function failRun(runId: string, errorReason: string, agentId: string, user
     })
     .eq('id', runId)
     .eq('status', 'running');  // ← no-op if run was cancelled before this helper fires
+
+  await supabase
+    .from('agents')
+    .update({ status: 'failed' })
+    .eq('id', agentId);
 
   // Insert failed run_card
   try {
