@@ -528,10 +528,20 @@ const RunCard = ({ message, isExpanded, onToggle }: { message: Message; isExpand
   const userFeedback = metadata.user_feedback || null;
   const finalOutput = metadata.full_output || metadata.output_preview || null;
   const durationStr = metadata.duration_seconds ? formatDuration(metadata.duration_seconds) : null;
+  const cardBorder = (() => {
+    switch (metadata.status) {
+      case 'completed': return '1px solid #B8DFC8';
+      case 'failed':    return '1px solid #FECACA';
+      case 'cancelled': return '1px solid #D4CFC6';
+      case 'running':   return '1px solid #C5D4F0';
+      case 'waiting_for_human': return '1px solid #F5D98A';
+      default:          return '1px solid #D4CFC6';
+    }
+  })();
 
   return (
     <div style={{
-      background: '#FFFFFF', border: '1px solid #D4CFC6', borderRadius: '12px', overflow: 'hidden',
+      background: '#FFFFFF', border: cardBorder, borderRadius: '12px', overflow: 'hidden',
       marginBottom: '4px', maxWidth: '600px', alignSelf: 'flex-start', width: '100%',
     }}>
       {/* Header */}
