@@ -127,6 +127,34 @@ export async function POST(request: Request) {
     } else if (classifiedIntent === 'RUN_TRIGGER' || content.toLowerCase().includes('run now')) {
       const result = await startAgentRun(supabase, agent_id, user.id);
 
+      if (result.success) {
+        // Insert run divider
+        await supabase.from('agent_conversations').insert({
+          agent_id,
+          user_id: user.id,
+          run_id: result.run_id,
+          role: 'agent',
+          message_type: 'run_divider',
+          content: `Run #${result.run_number} · ${new Date().toLocaleDateString('en-US', {
+            weekday: 'short', month: 'short', day: 'numeric'
+          })} · ${new Date().toLocaleTimeString('en-US', {
+            hour: 'numeric', minute: '2-digit', hour12: true
+          })}`,
+          metadata: { run_id: result.run_id, run_number: result.run_number }
+        });
+
+        // Insert agent acknowledgement message
+        await supabase.from('agent_conversations').insert({
+          agent_id,
+          user_id: user.id,
+          run_id: result.run_id,
+          role: 'agent',
+          message_type: 'text',
+          content: `Starting run #${result.run_number} now. I'll post the output here when it's done.`,
+          metadata: {}
+        });
+      }
+
       // Use stable code field (not fragile string match) to detect already-active run
       if (result.code === 'ACTIVE_RUN_EXISTS') {
         await supabase.from('agent_conversations').insert({
