@@ -911,7 +911,7 @@ function ConversationInner() {
   }, [messages, activeRunId, agentId, expandedRuns, showLiveWidget]);
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '1fr 300px', height: '100vh', overflow: 'hidden' }}>
+    <div style={{ display: 'grid', gridTemplateColumns: '1fr 300px', height: '100vh', overflow: 'hidden', fontFamily: "'DM Sans', sans-serif", background: '#FFFFFF' }}>
       <style>{`
         @keyframes pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.4; transform: scale(0.9); } }
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
@@ -960,8 +960,8 @@ function ConversationInner() {
 
         {/* Thread */}
         <div ref={threadRef} style={{
-          flex: 1, overflowY: 'auto', minHeight: 0, padding: '20px 24px 24px',
-          display: 'flex', flexDirection: 'column', gap: 0, background: '#F7F6F3'
+          flex: 1, overflowY: 'auto', minHeight: 0, padding: '20px 24px',
+          display: 'flex', flexDirection: 'column', background: '#F7F6F3'
         }}>
           {threadElements}
         </div>
