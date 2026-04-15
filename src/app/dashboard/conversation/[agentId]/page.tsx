@@ -200,7 +200,17 @@ const LiveRunWidget = ({ runId, agentId, onComplete }: { runId: string; agentId:
 
     async function poll() {
       const { data: runData } = await supabase.from('agent_runs').select('*').eq('id', runId).single();
-      if (runData) setRun(runData);
+      if (runData) {
+        setRun(runData);
+        // NEW: call onComplete when run reaches a terminal state
+        if (
+          runData.status === 'completed' ||
+          runData.status === 'failed' ||
+          runData.status === 'cancelled'
+        ) {
+          setTimeout(() => onComplete(), 1500);
+        }
+      }
 
       const { data: stepsData } = await supabase.from('agent_steps')
         .select('*').eq('agent_id', agentId).order('step_number', { ascending: true });
