@@ -49,7 +49,7 @@ export async function startAgentRun(
     if (force) {
       const { data: activeRuns } = await supabase
         .from('agent_runs')
-        .select('id, trigger_task_id')
+        .select('id, trigger_task_id, created_at')
         .eq('agent_id', agentId)
         .in('status', ACTIVE_STATUSES);
 
@@ -83,14 +83,13 @@ export async function startAgentRun(
           }
 
           // 3. Get actual run number for this run
-          const { data: cancelledRunData } = await supabase
+          const { count: runsBeforeCount } = await supabase
             .from('agent_runs')
-            .select('id')
+            .select('*', { count: 'exact', head: true })
             .eq('agent_id', agentId)
-            .order('created_at', { ascending: true });
-          const cancelledRunIndex = cancelledRunData
-            ? cancelledRunData.findIndex(r => r.id === run.id) + 1
-            : 0;
+            .lte('created_at', run.created_at);
+
+          const cancelledRunNumber = runsBeforeCount || 0;
 
           // 4. Post cancellation card to chat
           await supabase.from('agent_conversations').insert({
@@ -102,7 +101,7 @@ export async function startAgentRun(
             content: 'Run cancelled by user',
             metadata: {
               status: 'cancelled',
-              run_number: cancelledRunIndex,
+              run_number: cancelledRunNumber,
               cancelled_by_user: true,
               step_count: 0,
               duration_seconds: 0,
