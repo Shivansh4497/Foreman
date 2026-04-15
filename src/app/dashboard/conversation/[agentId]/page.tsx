@@ -275,7 +275,7 @@ const LiveRunWidget = ({ runId, agentId, onComplete }: { runId: string; agentId:
     return (
       <div style={{
         background: '#FFFFFF', border: '1px solid #D4CFC6', borderRadius: '12px', overflow: 'hidden',
-        marginBottom: '16px', maxWidth: '600px', alignSelf: 'flex-start', width: '100%',
+        marginBottom: '24px', maxWidth: '600px', alignSelf: 'flex-start', width: '100%',
         animation: 'fadeInUp 0.25s ease'
       }}>
         <div style={{ padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#F7F6F3' }}>
@@ -301,7 +301,7 @@ const LiveRunWidget = ({ runId, agentId, onComplete }: { runId: string; agentId:
     return (
       <div style={{
         background: '#FFFFFF', border: '1px solid #D4CFC6', borderRadius: '12px', overflow: 'hidden',
-        marginBottom: '16px', maxWidth: '600px', alignSelf: 'flex-start', width: '100%',
+        marginBottom: '24px', maxWidth: '600px', alignSelf: 'flex-start', width: '100%',
         animation: 'fadeInUp 0.2s ease'
       }}>
         {/* Header — always visible */}
@@ -409,7 +409,7 @@ const LiveRunWidget = ({ runId, agentId, onComplete }: { runId: string; agentId:
   return (
     <div style={{
       background: '#FFFFFF', border: `1px solid ${isWaiting ? '#E8D5A3' : '#D4CFC6'}`,
-      borderRadius: '12px', overflow: 'hidden', marginBottom: '16px',
+      borderRadius: '12px', overflow: 'hidden', marginBottom: '24px',
       maxWidth: '600px', alignSelf: 'flex-start', width: '100%', animation: 'fadeInUp 0.25s ease'
     }}>
       {/* Active Header */}
@@ -971,7 +971,7 @@ function ConversationInner() {
 
         {/* Thread */}
         <div ref={threadRef} style={{
-          flex: 1, overflowY: 'auto', minHeight: 0, padding: '20px 24px',
+          flex: 1, overflowY: 'auto', minHeight: 0, padding: '20px 24px 40px 24px',
           display: 'flex', flexDirection: 'column', background: '#F7F6F3'
         }}>
           {threadElements}
