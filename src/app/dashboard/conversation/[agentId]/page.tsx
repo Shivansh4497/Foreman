@@ -730,9 +730,9 @@ function ConversationInner() {
     return () => clearInterval(interval);
   }, [agentId]);
 
-  // Auto-scroll thread to bottom when new messages arrive (no widget active)
+  // Auto-scroll thread to bottom when new messages arrive or widget appears
   useEffect(() => {
-    if (!activeRunId && threadRef.current) {
+    if (threadRef.current) {
       threadRef.current.scrollTop = threadRef.current.scrollHeight;
     }
   }, [messages.length, activeRunId]);
