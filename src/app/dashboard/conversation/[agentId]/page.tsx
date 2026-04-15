@@ -1,7 +1,7 @@
 'use client';
 
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
-import { useEffect, useState, useRef, useMemo, Suspense } from 'react';
+import { useEffect, useState, useRef, useMemo, Suspense, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import ProfilePanel from '@/components/profile/ProfilePanel';
 
