@@ -519,19 +519,6 @@ const RunCard = ({ message, isExpanded, onToggle }: { message: Message; isExpand
 
   const timeStr = formatTime(message.created_at);
 
-  if (metadata.cancelled_by_user) {
-    return (
-      <div style={{
-        padding: '8px 16px', margin: '8px 0 4px', fontSize: '12px', color: '#7A7770',
-        display: 'flex', alignItems: 'center', gap: '8px', fontStyle: 'italic',
-        background: '#F7F6F3', borderRadius: '8px', alignSelf: 'flex-start', border: '1px solid #EAE9E4'
-      }}>
-        <div style={{ width: '6px', height: '6px', background: '#D4CFC6', borderRadius: '50%' }} />
-        Run cancelled by user · {timeStr}
-      </div>
-    );
-  }
-
   const headerBg = metadata.status === 'failed' ? '#FFF0F0' : '#F0FAF4';
   const headerColor = metadata.status === 'failed' ? '#991B1B' : '#1A7A4A';
   const headerText = metadata.status === 'completed'
@@ -581,14 +568,6 @@ const RunCard = ({ message, isExpanded, onToggle }: { message: Message; isExpand
               {String(finalOutput).substring(0, 180)}{String(finalOutput).length > 180 ? '...' : ''}
             </div>
           )}
-          <div style={{ padding: '4px 16px 10px', display: 'flex', justifyContent: 'flex-end' }}>
-            <button
-              onClick={onToggle}
-              style={{ fontSize: '12px', fontWeight: 500, color: '#2E5BBA', background: 'none', border: 'none', cursor: 'pointer' }}
-            >
-              Show full run ↓
-            </button>
-          </div>
         </div>
       ) : (
         <div style={{ animation: 'fadeIn 0.3s ease' }}>
@@ -615,14 +594,29 @@ const RunCard = ({ message, isExpanded, onToggle }: { message: Message; isExpand
               {finalOutput}
             </div>
           )}
-          <div style={{ padding: '6px 16px 10px', display: 'flex', justifyContent: 'flex-end' }}>
-            <button
-              onClick={onToggle}
-              style={{ fontSize: '12px', fontWeight: 500, color: '#2E5BBA', background: 'none', border: 'none', cursor: 'pointer' }}
-            >
-              Collapse ↑
-            </button>
-          </div>
+        </div>
+      )}
+
+      {metadata.status === 'failed' && metadata.error && (
+        <div style={{
+          padding: '10px 16px',
+          fontSize: '12px',
+          color: '#991B1B',
+          background: '#FEE2E2',
+          borderTop: '1px solid #FECACA'
+        }}>
+          Failed: {metadata.error}
+        </div>
+      )}
+
+      {metadata.status !== 'cancelled' && metadata.status !== 'failed' && (
+        <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '6px 16px 10px' }}>
+          <button
+            onClick={onToggle}
+            style={{ fontSize: '12px', fontWeight: 500, color: '#2E5BBA', background: 'none', border: 'none', cursor: 'pointer' }}
+          >
+            {isExpanded ? 'Close ↑' : 'Show full run ↓'}
+          </button>
         </div>
       )}
     </div>
