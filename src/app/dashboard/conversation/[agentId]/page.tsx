@@ -10,7 +10,7 @@ import ProfilePanel from '@/components/profile/ProfilePanel';
 interface Agent {
   id: string;
   name: string;
-  status: 'active' | 'paused' | 'running' | 'failed' | 'waiting' | 'waiting_for_human';
+  status: 'active' | 'paused' | 'pending' | 'running' | 'failed' | 'waiting' | 'waiting_for_human';
   total_runs: number;
   schedule?: string;
   agent_memory?: string;
@@ -208,33 +208,26 @@ const LiveRunWidget = ({ runId, agentId, onComplete }: {
 
       if (runData) {
         setRun(runData);
+
+        const { data: stepsData } = await supabase
+          .from('agent_steps')
+          .select('*')
+          .eq('agent_id', agentId)
+          .order('step_number', { ascending: true });
+
+        if (stepsData) setSteps(stepsData);
+
         // Scroll to bottom of widget after data loads
         setTimeout(() => {
           widgetBottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
         }, 100);
-        // Call onComplete when run reaches a terminal state
-        if (
-          runData.status === 'completed' ||
-          runData.status === 'failed' ||
-          runData.status === 'cancelled'
-        ) {
-          setTimeout(() => onComplete(), 800);
-        }
       }
-
-      const { data: stepsData } = await supabase
-        .from('agent_steps')
-        .select('*')
-        .eq('agent_id', agentId)
-        .order('step_number', { ascending: true });
-
-      if (stepsData) setSteps(stepsData);
     }
 
     poll();
     const interval = setInterval(poll, 3000);
     return () => clearInterval(interval);
-  }, [runId, agentId]);
+  }, [runId, agentId, onComplete]);
 
   const handleResume = async (feedback?: string) => {
     setResumeLoading(true);
@@ -670,16 +663,24 @@ function ConversationInner() {
 
   const [agent, setAgent] = useState<Agent | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
-  const [activeRunId, setActiveRunId] = useState<string | null>(null);
+  const [activeRunId, _setActiveRunId] = useState<string | null>(null);
+  const activeRunIdRef = useRef<string | null>(null);
+
+  const setActiveRunId = useCallback((id: string | null) => {
+    activeRunIdRef.current = id;
+    _setActiveRunId(id);
+  }, []);
   const [inputValue, setInputValue] = useState('');
   const [isSending, setIsSending] = useState(false);
   const [showRunConfirm, setShowRunConfirm] = useState(false);
   const [autorunAttempted, setAutorunAttempted] = useState(false);
   const [expandedRuns, setExpandedRuns] = useState<Record<string, boolean>>({});
 
+  const handleRunComplete = useCallback(() => {
+    setActiveRunId(null);
+  }, [setActiveRunId]);
+
   const threadRef = useRef<HTMLDivElement>(null);
-  const activeRunIdRef = useRef(activeRunId);
-  useEffect(() => { activeRunIdRef.current = activeRunId; }, [activeRunId]);
 
   // Initial Fetch & Polling
   useEffect(() => {
@@ -687,25 +688,22 @@ function ConversationInner() {
       const { data: agentData } = await supabase.from('agents').select('*').eq('id', agentId).single();
       if (agentData) setAgent(agentData);
 
-      if (agentData && (agentData.status === 'running' || agentData.status === 'waiting_for_human')) {
+      let activeRunFound = false;
+      if (agentData && (agentData.status === 'running' || agentData.status === 'waiting_for_human' || agentData.status === 'pending')) {
         const { data: runData } = await supabase.from('agent_runs')
           .select('id')
           .eq('agent_id', agentId)
-          .in('status', ['running', 'waiting_for_human'])
+          .in('status', ['pending', 'running', 'waiting_for_human'])
           .order('created_at', { ascending: false })
           .limit(1)
           .maybeSingle();
 
-        if (runData && activeRunIdRef.current !== 'starting') {
-          // Found an active run — show the widget
-          setActiveRunId(runData.id);
-        } else if (!runData && activeRunIdRef.current !== 'starting') {
-          // agents.status is stale — no active run exists
-          // Clear widget so thread shows correctly
-          setActiveRunId(null);
+        if (runData) {
+          activeRunFound = true;
+          if (activeRunIdRef.current !== 'starting') {
+            setActiveRunId(runData.id);
+          }
         }
-      } else if (agentData && activeRunIdRef.current !== 'starting') {
-        setActiveRunId(null);
       }
 
       const { data: msgData } = await supabase.from('agent_conversations')
@@ -722,6 +720,15 @@ function ConversationInner() {
           });
           return merged.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
         });
+
+        // BUG 2 FIX: Only clear the live widget once the run_card has been confirmed in the message list
+        const currentActiveId = activeRunIdRef.current;
+        if (currentActiveId && currentActiveId !== 'starting' && !activeRunFound) {
+          const hasRunCard = msgData.some(m => m.run_id === currentActiveId && m.message_type === 'run_card');
+          if (hasRunCard) {
+            setActiveRunId(null);
+          }
+        }
       }
     }
 
@@ -779,11 +786,14 @@ function ConversationInner() {
       threadRef.current && (threadRef.current.scrollTop = threadRef.current.scrollHeight);
       return;
     }
-    if (activeRunId && activeRunId !== 'starting' && !force && agent?.status === 'running') {
-      setShowRunConfirm(true); return;
+    if (activeRunId && activeRunId !== 'starting' && !force && (agent?.status === 'running' || agent?.status === 'pending')) {
+      setShowRunConfirm(true);
+      return;
     }
-    if (!activeRunId && agent?.status === 'running' && !force) {
-      setShowRunConfirm(true); return;
+
+    if (!activeRunId && (agent?.status === 'running' || agent?.status === 'pending') && !force) {
+      // Agent is active but widget not shown yet — just wait for poll to restore it
+      return;
     }
 
     setActiveRunId('starting');
@@ -856,7 +866,7 @@ function ConversationInner() {
           key={`live-run-${activeRunId}`}
           runId={activeRunId}
           agentId={agentId as string}
-          onComplete={() => setActiveRunId(null)}
+          onComplete={handleRunComplete}
         />
       );
     }
