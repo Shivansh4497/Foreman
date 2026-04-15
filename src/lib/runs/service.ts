@@ -82,7 +82,17 @@ export async function startAgentRun(
             console.log(`[startAgentRun] Marked run ${run.id} as cancelled`);
           }
 
-          // Post cancellation card to chat
+          // 3. Get actual run number for this run
+          const { data: cancelledRunData } = await supabase
+            .from('agent_runs')
+            .select('id')
+            .eq('agent_id', agentId)
+            .order('created_at', { ascending: true });
+          const cancelledRunIndex = cancelledRunData
+            ? cancelledRunData.findIndex(r => r.id === run.id) + 1
+            : 0;
+
+          // 4. Post cancellation card to chat
           await supabase.from('agent_conversations').insert({
             agent_id: agentId,
             user_id: userId,
@@ -90,7 +100,15 @@ export async function startAgentRun(
             role: 'agent',
             message_type: 'run_card',
             content: 'Run cancelled by user',
-            metadata: { status: 'cancelled', cancelled_by_user: true }
+            metadata: {
+              status: 'cancelled',
+              run_number: cancelledRunIndex,
+              cancelled_by_user: true,
+              step_count: 0,
+              duration_seconds: 0,
+              output_preview: '',
+              steps: []
+            }
           });
         }
       }
