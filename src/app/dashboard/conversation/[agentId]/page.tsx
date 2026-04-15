@@ -702,7 +702,7 @@ function ConversationInner() {
   const [activeRunId, setActiveRunId] = useState<string | null>(null);
   const [inputValue, setInputValue] = useState('');
   const [isSending, setIsSending] = useState(false);
-  const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
+
   const [showRunConfirm, setShowRunConfirm] = useState(false);
   const [autorunAttempted, setAutorunAttempted] = useState(false);
   const [expandedRuns, setExpandedRuns] = useState<Record<string, boolean>>({});
@@ -930,9 +930,7 @@ function ConversationInner() {
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
       `}</style>
 
-      {selectedAgentId && (
-        <ProfilePanel agentId={selectedAgentId} onClose={() => setSelectedAgentId(null)} onRunNow={handleRunNow} />
-      )}
+
 
       {/* Chat Column */}
       <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden', flex: 1, minWidth: 0, borderRight: '1px solid #D4CFC6' }}>
@@ -1001,9 +999,8 @@ function ConversationInner() {
         </div>
       </div>
 
-      {/* Profile Column */}
-      <div style={{ height: '100vh', overflow: 'hidden' }}>
-        <ProfilePanel agentId={agentId as string} inline onRunNow={() => handleRunNow()} />
+      <div style={{ height: '100vh', overflow: 'hidden', borderLeft: '1px solid #D4CFC6' }}>
+        <ProfilePanel agentId={agentId as string} onRunNow={() => handleRunNow()} onClose={() => {}} />
       </div>
 
       {/* Concurrency Modal */}
