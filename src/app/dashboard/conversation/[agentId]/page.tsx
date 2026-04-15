@@ -186,23 +186,33 @@ const StepRow = ({ step, isLast }: { step: Step; isLast: boolean }) => {
 
 // --- LiveRunWidget: two-state inline chat card ---
 
-const LiveRunWidget = ({ runId, agentId, onComplete }: { runId: string; agentId: string; onComplete: () => void }) => {
+const LiveRunWidget = ({ runId, agentId, onComplete }: {
+  runId: string;
+  agentId: string;
+  onComplete: () => void;
+}) => {
   const [run, setRun] = useState<AgentRun | null>(null);
   const [steps, setSteps] = useState<any[]>([]);
   const [resumeLoading, setResumeLoading] = useState(false);
-  const [isExpanded, setIsExpanded] = useState(false); // for completed compressed → expanded toggle
-  const [checkpointInput, setCheckpointInput] = useState('');
-  const completedRef = useRef(false);
   const widgetBottomRef = useRef<HTMLDivElement>(null);
 
-  // Polling
   useEffect(() => {
-    if (runId === 'starting') return;
-
     async function poll() {
-      const { data: runData } = await supabase.from('agent_runs').select('*').eq('id', runId).single();
+      if (runId === 'starting') return;
+
+      const { data: runData } = await supabase
+        .from('agent_runs')
+        .select('*')
+        .eq('id', runId)
+        .single();
+
       if (runData) {
         setRun(runData);
+        // Scroll to bottom of widget after data loads
+        setTimeout(() => {
+          widgetBottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+        }, 100);
+        // Call onComplete when run reaches a terminal state
         if (
           runData.status === 'completed' ||
           runData.status === 'failed' ||
@@ -212,13 +222,13 @@ const LiveRunWidget = ({ runId, agentId, onComplete }: { runId: string; agentId:
         }
       }
 
-      const { data: stepsData } = await supabase.from('agent_steps')
-        .select('*').eq('agent_id', agentId).order('step_number', { ascending: true });
-      if (stepsData) setSteps(stepsData);
+      const { data: stepsData } = await supabase
+        .from('agent_steps')
+        .select('*')
+        .eq('agent_id', agentId)
+        .order('step_number', { ascending: true });
 
-      setTimeout(() => {
-        widgetBottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
-      }, 150);
+      if (stepsData) setSteps(stepsData);
     }
 
     poll();
@@ -226,69 +236,59 @@ const LiveRunWidget = ({ runId, agentId, onComplete }: { runId: string; agentId:
     return () => clearInterval(interval);
   }, [runId, agentId]);
 
-  // Wire onComplete: fire when run reaches a terminal state
-  useEffect(() => {
-    if (!run) return;
-    const terminal = ['completed', 'failed', 'cancelled'];
-    if (terminal.includes(run.status) && !completedRef.current) {
-      completedRef.current = true;
-      const t = setTimeout(() => onComplete(), 800);
-      return () => clearTimeout(t);
-    }
-  }, [run?.status, onComplete]);
-
   const handleResume = async (feedback?: string) => {
     setResumeLoading(true);
     try {
       const { data: { session } } = await supabase.auth.getSession();
       await fetch('/api/runs/resume', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token}` },
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session?.access_token}`
+        },
         body: JSON.stringify({ run_id: runId, human_feedback: feedback })
       });
-      setCheckpointInput('');
-    } catch (e) { console.error(e); }
+    } catch (e) {
+      console.error(e);
+    }
     setResumeLoading(false);
   };
 
-  const isTerminal = run && ['completed', 'failed', 'cancelled'].includes(run.status);
-  const stepStatuses = run?.global_state?.step_statuses || {};
-
-  // Extract user feedback from global_state (stored by worker at checkpoint)
-  const userFeedback = run?.global_state?.human_feedback_step
-    ? Object.entries(run.global_state)
-        .filter(([k]) => k.startsWith('human_feedback_step_'))
-        .map(([, v]) => v as string)
-        .filter(Boolean)
-        .join(', ')
-    : null;
-
-  // Final output: last step's output
-  const lastStepOutput = steps.length > 0
-    ? run?.global_state?.[`step_${steps[steps.length - 1]?.step_number}_output`] || null
-    : null;
-
-  // Duration
-  const durationSecs = run?.created_at && run?.completed_at
-    ? Math.floor((new Date(run.completed_at).getTime() - new Date(run.created_at).getTime()) / 1000)
-    : null;
-
-  // ── Loading / Starting state ──
-  if (!run || runId === 'starting') {
+  // Loading state — run data not yet fetched
+  if (!run) {
     return (
       <div style={{
-        background: '#FFFFFF', border: '1px solid #D4CFC6', borderRadius: '12px', overflow: 'hidden',
-        marginBottom: '24px', maxWidth: '600px', alignSelf: 'flex-start', width: '100%',
+        background: '#FFFFFF',
+        border: '1px solid #D4CFC6',
+        borderRadius: '12px',
+        overflow: 'hidden',
+        marginBottom: '24px',
+        maxWidth: '640px',
+        alignSelf: 'flex-start',
+        width: '100%',
         animation: 'fadeInUp 0.25s ease'
       }}>
-        <div style={{ padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#F7F6F3' }}>
+        <div style={{
+          padding: '12px 16px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          background: '#F7F6F3',
+        }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <div className="spinner-mini" />
-            <div style={{ fontSize: '12px', fontWeight: 600, color: '#1A1916' }}>Starting agent...</div>
+            <div style={{ fontSize: '12px', fontWeight: 600, color: '#1A1916' }}>
+              Starting agent...
+            </div>
           </div>
           <Badge status="running" pulse />
         </div>
-        <div style={{ padding: '20px 16px', textAlign: 'center', fontSize: '13px', color: '#7A7770' }}>
+        <div style={{
+          padding: '24px 16px',
+          textAlign: 'center',
+          fontSize: '13px',
+          color: '#7A7770'
+        }}>
           Preparing workflow and initializing steps...
         </div>
         <div ref={widgetBottomRef} style={{ height: '1px' }} />
@@ -296,205 +296,159 @@ const LiveRunWidget = ({ runId, agentId, onComplete }: { runId: string; agentId:
     );
   }
 
-  // ── COMPLETED STATE: compressed card (default) or expanded ──
-  if (isTerminal) {
-    const headerBg = run.status === 'failed' ? '#FFF0F0' : '#F0FAF4';
-    const headerColor = run.status === 'failed' ? '#991B1B' : '#1A7A4A';
-    const headerText = run.status === 'completed' ? 'Run completed' : run.status === 'failed' ? 'Run failed' : 'Run cancelled';
+  const stepStatuses = run.global_state?.step_statuses || {};
 
-    return (
-      <div style={{
-        background: '#FFFFFF', border: '1px solid #D4CFC6', borderRadius: '12px', overflow: 'hidden',
-        marginBottom: '24px', maxWidth: '600px', alignSelf: 'flex-start', width: '100%',
-        animation: 'fadeInUp 0.2s ease'
-      }}>
-        {/* Header — always visible */}
-        <div
-          onClick={() => setIsExpanded(e => !e)}
-          style={{
-            padding: '11px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-            background: headerBg, cursor: 'pointer', borderBottom: isExpanded ? '1px solid #D4CFC6' : 'none'
-          }}
-        >
-          <div style={{ fontSize: '12px', fontWeight: 600, color: headerColor }}>{headerText}</div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            {durationSecs !== null && (
-              <span style={{ fontSize: '11px', color: '#7A7770' }}>{formatDuration(durationSecs)}</span>
-            )}
-            <Badge status={run.status} />
-            <span style={{ fontSize: '11px', color: '#7A7770' }}>{isExpanded ? '↑' : '↓'}</span>
-          </div>
-        </div>
+  const headerLabel = run.status === 'completed'
+    ? 'Run finished'
+    : run.status === 'failed'
+    ? 'Run failed'
+    : run.status === 'cancelled'
+    ? 'Run cancelled'
+    : 'Running...';
 
-        {!isExpanded ? (
-          // ── Compressed body: user feedback + final output preview ──
-          <div>
-            {userFeedback && (
-              <div style={{ padding: '10px 16px 0', display: 'flex', gap: '8px', alignItems: 'flex-start' }}>
-                <div style={{ fontSize: '11px', fontWeight: 600, color: '#7A7770', paddingTop: '1px', flexShrink: 0 }}>You said</div>
-                <div style={{
-                  background: '#F0EEE9', border: '1px solid #D4CFC6', borderRadius: '6px',
-                  padding: '5px 10px', fontSize: '12px', color: '#4A4845', fontStyle: 'italic', flex: 1
-                }}>
-                  "{userFeedback}"
-                </div>
-              </div>
-            )}
-            {lastStepOutput && (
-              <div style={{ padding: '10px 16px', fontSize: '13px', color: '#4A4845', lineHeight: 1.6 }}>
-                {String(lastStepOutput).substring(0, 180)}{String(lastStepOutput).length > 180 ? '...' : ''}
-              </div>
-            )}
-            {!lastStepOutput && run.status === 'failed' && (
-              <div style={{ padding: '10px 16px', fontSize: '13px', color: '#991B1B', lineHeight: 1.6 }}>
-                {run.global_state?.error || 'Run failed unexpectedly.'}
-              </div>
-            )}
-            <div style={{ padding: '4px 16px 10px', display: 'flex', justifyContent: 'flex-end' }}>
-              <button
-                onClick={() => setIsExpanded(true)}
-                style={{ fontSize: '12px', fontWeight: 500, color: '#2E5BBA', background: 'none', border: 'none', cursor: 'pointer' }}
-              >
-                Show full run ↓
-              </button>
-            </div>
-          </div>
-        ) : (
-          // ── Expanded body: full step list + outputs ──
-          <div style={{ animation: 'fadeIn 0.2s ease' }}>
-            {userFeedback && (
-              <div style={{ padding: '10px 16px 0', display: 'flex', gap: '8px', alignItems: 'flex-start' }}>
-                <div style={{ fontSize: '11px', fontWeight: 600, color: '#7A7770', paddingTop: '1px', flexShrink: 0 }}>You said</div>
-                <div style={{
-                  background: '#F0EEE9', border: '1px solid #D4CFC6', borderRadius: '6px',
-                  padding: '5px 10px', fontSize: '12px', color: '#4A4845', fontStyle: 'italic', flex: 1
-                }}>
-                  "{userFeedback}"
-                </div>
-              </div>
-            )}
-            <div style={{ padding: '12px 16px', borderBottom: '1px solid #F0EEE9' }}>
-              {steps.map((s, idx) => (
-                <StepRow
-                  key={idx}
-                  step={{
-                    step_number: s.step_number,
-                    name: s.name || s.objective?.split('.')[0] || `Step ${s.step_number}`,
-                    step_type: s.step_type,
-                    status: stepStatuses[s.step_number.toString()] || 'completed',
-                    output: run.global_state?.[`step_${s.step_number}_output`] || null
-                  }}
-                  isLast={idx === steps.length - 1}
-                />
-              ))}
-            </div>
-            {lastStepOutput && (
-              <div style={{ padding: '12px 16px', background: '#FAFAF8', fontSize: '13px', color: '#1A1916', lineHeight: 1.7, whiteSpace: 'pre-line', borderBottom: '1px solid #F0EEE9' }}>
-                {lastStepOutput}
-              </div>
-            )}
-            <div style={{ padding: '6px 16px 10px', display: 'flex', justifyContent: 'flex-end' }}>
-              <button
-                onClick={() => setIsExpanded(false)}
-                style={{ fontSize: '12px', fontWeight: 500, color: '#2E5BBA', background: 'none', border: 'none', cursor: 'pointer' }}
-              >
-                Collapse ↑
-              </button>
-            </div>
-          </div>
-        )}
-        <div ref={widgetBottomRef} style={{ height: '1px' }} />
-      </div>
-    );
-  }
-
-  // ── ACTIVE STATE: live expanded widget ──
-  const isWaiting = run.status === 'waiting_for_human';
+  const badgeStatus = run.status === 'completed'
+    ? 'completed'
+    : run.status === 'failed'
+    ? 'failed'
+    : run.status === 'cancelled'
+    ? 'cancelled'
+    : run.status === 'waiting_for_human'
+    ? 'waiting_for_human'
+    : 'running';
 
   return (
     <div style={{
-      background: '#FFFFFF', border: '1px solid #D4CFC6',
-      borderRadius: '12px', overflow: 'hidden', marginBottom: '24px',
-      maxWidth: '600px', alignSelf: 'flex-start', width: '100%', animation: 'fadeInUp 0.25s ease'
+      background: '#FFFFFF',
+      border: '1px solid #D4CFC6',
+      borderRadius: '12px',
+      overflow: 'hidden',
+      marginBottom: '24px',
+      maxWidth: '640px',
+      alignSelf: 'flex-start',
+      width: '100%',
+      animation: 'fadeInUp 0.25s ease'
     }}>
-      {/* Active Header */}
+      {/* Header */}
       <div style={{
-        padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        padding: '12px 16px',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
         borderBottom: '1px solid #D4CFC6',
-        background: isWaiting ? '#FEF8EC' : run.status === 'failed' ? '#FFF0F0' : 'transparent',
+        background: run.status === 'failed' ? '#FEE2E2' : 'transparent',
       }}>
-        <div style={{ fontSize: '12px', fontWeight: 600, color: isWaiting ? '#8A5C00' : '#1A1916' }}>
-          {isWaiting ? '⏸ Waiting for your input' : 'Agent running...'}
+        <div style={{ fontSize: '12px', fontWeight: 600, color: '#1A1916' }}>
+          {headerLabel}
         </div>
-        <Badge
-          status={isWaiting ? 'waiting_for_human' : 'running'}
-          pulse={true}
-        />
+        <Badge status={badgeStatus} pulse={run.status === 'running'} />
       </div>
 
-      {/* Step List */}
+      {/* Step list */}
       <div style={{ padding: '12px 16px' }}>
         {steps.map((s, idx) => {
           const status = stepStatuses[s.step_number.toString()] || 'pending';
-          const isCurrent = status === 'waiting_for_human';
+          const isCheckpoint = status === 'waiting_for_human';
 
           return (
-            <div key={idx}>
+            <div key={s.id || idx}>
               <StepRow
                 step={{
                   step_number: s.step_number,
-                  name: s.name || s.objective?.split('.')[0] || `Step ${s.step_number}`,
+                  name: s.name || s.objective.split('.')[0],
                   step_type: s.step_type,
-                  status,
+                  status: status,
                   output: run.global_state?.[`step_${s.step_number}_output`] || null
                 }}
-                isLast={idx === steps.length - 1 && !isCurrent}
+                isLast={idx === steps.length - 1}
               />
 
-              {/* Checkpoint UI — inline below the waiting step */}
-              {isCurrent && (
+              {/* Inline checkpoint UI */}
+              {isCheckpoint && (
                 <div style={{
-                  background: '#FFFBF2', border: '1px solid #E8D5A3', borderRadius: '8px',
-                  padding: '12px', margin: '8px 0 8px 30px', animation: 'fadeIn 0.2s ease'
+                  background: '#FFFFFF',
+                  border: '1px solid #C5D4F0',
+                  borderRadius: '8px',
+                  padding: '12px',
+                  margin: '8px 0 8px 30px',
+                  animation: 'fadeIn 0.2s ease'
                 }}>
-                  <div style={{ fontSize: '12px', fontWeight: 600, color: '#8A5C00', marginBottom: '10px' }}>
+                  <div style={{
+                    fontSize: '12px',
+                    fontWeight: 600,
+                    color: '#2E5BBA',
+                    marginBottom: '10px'
+                  }}>
                     Your input is needed
                   </div>
-                  <div style={{ display: 'flex', gap: '8px', marginBottom: '10px', flexWrap: 'wrap' }}>
+
+                  {/* Quick reply pills */}
+                  <div style={{ display: 'flex', gap: '8px', marginBottom: '12px', flexWrap: 'wrap' }}>
                     {['Looks good, proceed', 'Revise the tone'].map(pill => (
                       <button
                         key={pill}
                         disabled={resumeLoading}
                         onClick={() => handleResume(pill === 'Looks good, proceed' ? undefined : pill)}
                         style={{
-                          padding: '6px 14px', borderRadius: '100px', fontSize: '12px',
-                          background: '#FEF3DC', border: '1px solid #E8D5A3', color: '#8A5C00',
-                          cursor: 'pointer', transition: 'all 0.15s', fontFamily: 'inherit'
+                          padding: '6px 14px',
+                          borderRadius: '100px',
+                          fontSize: '12px',
+                          background: '#F7F6F3',
+                          border: '1px solid #D4CFC6',
+                          color: '#4A4845',
+                          cursor: 'pointer',
+                          fontFamily: "'DM Sans', sans-serif",
+                          transition: 'all 0.15s'
                         }}
-                        onMouseEnter={e => { e.currentTarget.style.background = '#F5E6C0'; }}
-                        onMouseLeave={e => { e.currentTarget.style.background = '#FEF3DC'; }}
+                        onMouseEnter={e => {
+                          e.currentTarget.style.borderColor = '#2E5BBA';
+                          e.currentTarget.style.color = '#2E5BBA';
+                        }}
+                        onMouseLeave={e => {
+                          e.currentTarget.style.borderColor = '#D4CFC6';
+                          e.currentTarget.style.color = '#4A4845';
+                        }}
                       >
                         {pill}
                       </button>
                     ))}
                   </div>
+
+                  {/* Free text input */}
                   <div style={{ display: 'flex', gap: '8px' }}>
                     <textarea
-                      value={checkpointInput}
-                      onChange={e => setCheckpointInput(e.target.value)}
-                      placeholder="Type instructions..."
+                      id={`checkpoint-input-${s.step_number}`}
+                      placeholder="Type custom instructions..."
+                      disabled={resumeLoading}
                       style={{
-                        flex: 1, height: '36px', padding: '8px 12px', border: '1px solid #E8D5A3',
-                        borderRadius: '8px', fontSize: '12px', fontFamily: 'inherit', resize: 'none',
-                        background: '#FFFBF2'
+                        flex: 1,
+                        height: '36px',
+                        padding: '8px 12px',
+                        border: '1px solid #D4CFC6',
+                        borderRadius: '8px',
+                        fontSize: '12px',
+                        fontFamily: "'DM Sans', sans-serif",
+                        resize: 'none',
+                        color: '#1A1916'
                       }}
                     />
                     <button
                       disabled={resumeLoading}
-                      onClick={() => handleResume(checkpointInput || undefined)}
+                      onClick={() => {
+                        const el = document.getElementById(
+                          `checkpoint-input-${s.step_number}`
+                        ) as HTMLTextAreaElement;
+                        handleResume(el?.value || undefined);
+                      }}
                       style={{
-                        background: '#1A1916', color: 'white', border: 'none', borderRadius: '8px',
-                        padding: '0 16px', fontSize: '12px', cursor: 'pointer', fontFamily: 'inherit'
+                        background: '#1A1916',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '8px',
+                        padding: '0 16px',
+                        fontSize: '12px',
+                        cursor: resumeLoading ? 'not-allowed' : 'pointer',
+                        opacity: resumeLoading ? 0.6 : 1,
+                        fontFamily: "'DM Sans', sans-serif"
                       }}
                     >
                       {resumeLoading ? '...' : 'Send'}
@@ -505,13 +459,10 @@ const LiveRunWidget = ({ runId, agentId, onComplete }: { runId: string; agentId:
             </div>
           );
         })}
-        {steps.length === 0 && (
-          <div style={{ padding: '12px 0', fontSize: '13px', color: '#7A7770', textAlign: 'center' }}>
-            Loading steps...
-          </div>
-        )}
-        <div ref={widgetBottomRef} style={{ height: '1px' }} />
       </div>
+
+      {/* Scroll anchor — always at the very bottom of the widget */}
+      <div ref={widgetBottomRef} style={{ height: '1px' }} />
     </div>
   );
 };
@@ -774,33 +725,12 @@ function ConversationInner() {
     return () => clearInterval(interval);
   }, [agentId]);
 
-  // ResizeObserver: auto-scroll to bottom whenever thread content grows
+  // Auto-scroll thread to bottom when new messages arrive (no widget active)
   useEffect(() => {
-    const container = threadRef.current;
-    if (!container) return;
-
-    const scrollToBottom = () => {
-      const distanceFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
-      if (distanceFromBottom < 200) {
-        container.scrollTop = container.scrollHeight;
-      }
-    };
-
-    const observer = new ResizeObserver(scrollToBottom);
-    // Observe the thread container itself (its scrollHeight changes as content grows)
-    observer.observe(container);
-    // Also immediately scroll on mount
-    scrollToBottom();
-
-    return () => observer.disconnect();
-  }, []);
-
-  // Scroll to bottom of thread whenever messages change (no active run)
-  useEffect(() => {
-    if (threadRef.current) {
+    if (!activeRunId && threadRef.current) {
       threadRef.current.scrollTop = threadRef.current.scrollHeight;
     }
-  }, [messages.length]);
+  }, [messages.length, activeRunId]);
 
   // Autorun (once)
   useEffect(() => {
@@ -888,39 +818,38 @@ function ConversationInner() {
     } catch (e) { console.error(e); }
   };
 
-  // Determine if the LiveRunWidget should be shown inline in thread
-  const hasRunCardForActiveRun = useMemo(
-    () => messages.some(m => m.run_id === activeRunId && m.message_type === 'run_card'),
-    [messages, activeRunId]
-  );
-  const showLiveWidget = !!activeRunId && !hasRunCardForActiveRun;
-
-  // Build thread elements
   const threadElements = useMemo(() => {
     const elements: React.ReactNode[] = [];
     let lastDate = '';
 
-    messages.forEach(msg => {
-      const date = new Date(msg.created_at).toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
+    messages.forEach((msg) => {
+      const date = new Date(msg.created_at).toLocaleDateString('en-US', {
+        weekday: 'long', month: 'short', day: 'numeric'
+      });
       if (date !== lastDate) {
         elements.push(<DayDivider key={`divider-${msg.id}`} date={date} />);
         lastDate = date;
       }
       elements.push(
         <MessageBubble
-          key={msg.id} message={msg}
+          key={msg.id}
+          message={msg}
           isExpanded={expandedRuns[msg.id]}
           onToggleRun={() => setExpandedRuns(prev => ({ ...prev, [msg.id]: !prev[msg.id] }))}
         />
       );
     });
 
-    // Live widget inline at the bottom of the thread
-    if (showLiveWidget) {
+    // Show live widget only if there is an active run with no run_card yet
+    const hasRunCardForActiveRun = activeRunId
+      ? messages.some(m => m.run_id === activeRunId && m.message_type === 'run_card')
+      : false;
+
+    if (activeRunId && !hasRunCardForActiveRun) {
       elements.push(
         <LiveRunWidget
-          key={`live-${activeRunId}`}
-          runId={activeRunId!}
+          key={`live-run-${activeRunId}`}
+          runId={activeRunId}
           agentId={agentId as string}
           onComplete={() => setActiveRunId(null)}
         />
@@ -929,15 +858,26 @@ function ConversationInner() {
 
     if (elements.length === 0) {
       return (
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', opacity: 0.5 }}>
-          <div style={{ fontSize: '14px', fontWeight: 500, color: '#7A7770', marginBottom: '8px' }}>No activity yet</div>
-          <div style={{ fontSize: '12px', color: '#7A7770' }}>Send a message or click 'Run now' to get started.</div>
+        <div style={{
+          flex: 1,
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          opacity: 0.5
+        }}>
+          <div style={{ fontSize: '14px', fontWeight: 500, color: '#7A7770', marginBottom: '8px' }}>
+            No activity yet
+          </div>
+          <div style={{ fontSize: '12px', color: '#7A7770' }}>
+            Send a message or click 'Run now' to get started.
+          </div>
         </div>
       );
     }
 
     return elements;
-  }, [messages, activeRunId, agentId, expandedRuns, showLiveWidget]);
+  }, [messages, activeRunId, agentId, expandedRuns]);
 
   return (
     <div style={{ display: 'grid', gridTemplateColumns: '1fr 300px', height: '100vh', overflow: 'hidden', fontFamily: "'DM Sans', sans-serif", background: '#FFFFFF' }}>
