@@ -193,6 +193,7 @@ const LiveRunWidget = ({ runId, agentId, onComplete }: { runId: string; agentId:
   const [isExpanded, setIsExpanded] = useState(false); // for completed compressed → expanded toggle
   const [checkpointInput, setCheckpointInput] = useState('');
   const completedRef = useRef(false);
+  const widgetBottomRef = useRef<HTMLDivElement>(null);
 
   // Polling
   useEffect(() => {
@@ -202,19 +203,22 @@ const LiveRunWidget = ({ runId, agentId, onComplete }: { runId: string; agentId:
       const { data: runData } = await supabase.from('agent_runs').select('*').eq('id', runId).single();
       if (runData) {
         setRun(runData);
-        // NEW: call onComplete when run reaches a terminal state
         if (
           runData.status === 'completed' ||
           runData.status === 'failed' ||
           runData.status === 'cancelled'
         ) {
-          setTimeout(() => onComplete(), 1500);
+          setTimeout(() => onComplete(), 800);
         }
       }
 
       const { data: stepsData } = await supabase.from('agent_steps')
         .select('*').eq('agent_id', agentId).order('step_number', { ascending: true });
       if (stepsData) setSteps(stepsData);
+
+      setTimeout(() => {
+        widgetBottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+      }, 150);
     }
 
     poll();
@@ -228,8 +232,7 @@ const LiveRunWidget = ({ runId, agentId, onComplete }: { runId: string; agentId:
     const terminal = ['completed', 'failed', 'cancelled'];
     if (terminal.includes(run.status) && !completedRef.current) {
       completedRef.current = true;
-      // Delay: let backend update agents.status first, then clear the header badge
-      const t = setTimeout(() => onComplete(), 2000);
+      const t = setTimeout(() => onComplete(), 800);
       return () => clearTimeout(t);
     }
   }, [run?.status, onComplete]);
@@ -288,6 +291,7 @@ const LiveRunWidget = ({ runId, agentId, onComplete }: { runId: string; agentId:
         <div style={{ padding: '20px 16px', textAlign: 'center', fontSize: '13px', color: '#7A7770' }}>
           Preparing workflow and initializing steps...
         </div>
+        <div ref={widgetBottomRef} style={{ height: '1px' }} />
       </div>
     );
   }
@@ -399,6 +403,7 @@ const LiveRunWidget = ({ runId, agentId, onComplete }: { runId: string; agentId:
             </div>
           </div>
         )}
+        <div ref={widgetBottomRef} style={{ height: '1px' }} />
       </div>
     );
   }
@@ -408,7 +413,7 @@ const LiveRunWidget = ({ runId, agentId, onComplete }: { runId: string; agentId:
 
   return (
     <div style={{
-      background: '#FFFFFF', border: `1px solid ${isWaiting ? '#E8D5A3' : '#D4CFC6'}`,
+      background: '#FFFFFF', border: '1px solid #D4CFC6',
       borderRadius: '12px', overflow: 'hidden', marginBottom: '24px',
       maxWidth: '600px', alignSelf: 'flex-start', width: '100%', animation: 'fadeInUp 0.25s ease'
     }}>
@@ -505,6 +510,7 @@ const LiveRunWidget = ({ runId, agentId, onComplete }: { runId: string; agentId:
             Loading steps...
           </div>
         )}
+        <div ref={widgetBottomRef} style={{ height: '1px' }} />
       </div>
     </div>
   );
@@ -528,16 +534,7 @@ const RunCard = ({ message, isExpanded, onToggle }: { message: Message; isExpand
   const userFeedback = metadata.user_feedback || null;
   const finalOutput = metadata.full_output || metadata.output_preview || null;
   const durationStr = metadata.duration_seconds ? formatDuration(metadata.duration_seconds) : null;
-  const cardBorder = (() => {
-    switch (metadata.status) {
-      case 'completed': return '1px solid #B8DFC8';
-      case 'failed':    return '1px solid #FECACA';
-      case 'cancelled': return '1px solid #D4CFC6';
-      case 'running':   return '1px solid #C5D4F0';
-      case 'waiting_for_human': return '1px solid #F5D98A';
-      default:          return '1px solid #D4CFC6';
-    }
-  })();
+  const cardBorder = '1px solid #D4CFC6';
 
   return (
     <div style={{
@@ -560,7 +557,7 @@ const RunCard = ({ message, isExpanded, onToggle }: { message: Message; isExpand
         </div>
       </div>
 
-      {!isExpanded ? (
+      {!isExpanded && (
         <div>
           {userFeedback && (
             <div style={{ padding: '10px 16px 0', display: 'flex', gap: '8px', alignItems: 'flex-start' }}>
@@ -579,54 +576,73 @@ const RunCard = ({ message, isExpanded, onToggle }: { message: Message; isExpand
             </div>
           )}
         </div>
-      ) : (
-        <div style={{ animation: 'fadeIn 0.3s ease' }}>
-          {userFeedback && (
-            <div style={{ padding: '10px 16px 0', display: 'flex', gap: '8px', alignItems: 'flex-start' }}>
-              <div style={{ fontSize: '11px', fontWeight: 600, color: '#7A7770', paddingTop: '1px', flexShrink: 0 }}>You said</div>
-              <div style={{
-                background: '#F0EEE9', border: '1px solid #D4CFC6', borderRadius: '6px',
-                padding: '5px 10px', fontSize: '12px', color: '#4A4845', fontStyle: 'italic', flex: 1
-              }}>
-                "{userFeedback}"
-              </div>
-            </div>
-          )}
-          {metadata.steps && metadata.steps.length > 0 && (
-            <div style={{ padding: '12px 16px', borderBottom: '1px solid #F0EEE9' }}>
-              {metadata.steps.map((step, idx) => (
-                <StepRow key={idx} step={step} isLast={idx === metadata.steps.length - 1} />
-              ))}
-            </div>
-          )}
-          {finalOutput && (
-            <div style={{ padding: '12px 16px', background: '#FAFAF8', fontSize: '13px', color: '#1A1916', lineHeight: 1.7, whiteSpace: 'pre-line', borderBottom: '1px solid #F0EEE9' }}>
-              {finalOutput}
-            </div>
-          )}
-        </div>
       )}
 
+      {/* Only show expand button for completed runs with output */}
+      {metadata.status === 'completed' && (
+        <>
+          {!isExpanded && (
+            <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '6px 16px 10px' }}>
+              <button
+                onClick={onToggle}
+                style={{
+                  fontSize: '12px', fontWeight: 500, color: '#2E5BBA',
+                  background: 'none', border: 'none', cursor: 'pointer',
+                  fontFamily: "'DM Sans', sans-serif"
+                }}
+              >
+                Show full run ↓
+              </button>
+            </div>
+          )}
+          {isExpanded && (
+            <>
+              {userFeedback && (
+                <div style={{ padding: '10px 16px 0', display: 'flex', gap: '8px', alignItems: 'flex-start' }}>
+                  <div style={{ fontSize: '11px', fontWeight: 600, color: '#7A7770', paddingTop: '1px', flexShrink: 0 }}>You said</div>
+                  <div style={{
+                    background: '#F0EEE9', border: '1px solid #D4CFC6', borderRadius: '6px',
+                    padding: '5px 10px', fontSize: '12px', color: '#4A4845', fontStyle: 'italic', flex: 1
+                  }}>
+                    "{userFeedback}"
+                  </div>
+                </div>
+              )}
+              <div style={{ padding: '12px 16px', borderBottom: '1px solid #D4CFC6' }}>
+                {metadata.steps?.map((step, idx) => (
+                  <StepRow key={idx} step={step} isLast={idx === (metadata.steps?.length ?? 1) - 1} />
+                ))}
+              </div>
+              <div style={{
+                padding: '14px 16px', background: '#F7F6F3',
+                fontSize: '13px', color: '#1A1916', lineHeight: 1.7, whiteSpace: 'pre-line'
+              }}>
+                {metadata.full_output}
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '6px 16px 10px' }}>
+                <button
+                  onClick={onToggle}
+                  style={{
+                    fontSize: '12px', fontWeight: 500, color: '#2E5BBA',
+                    background: 'none', border: 'none', cursor: 'pointer',
+                    fontFamily: "'DM Sans', sans-serif"
+                  }}
+                >
+                  Close ↑
+                </button>
+              </div>
+            </>
+          )}
+        </>
+      )}
+
+      {/* Failed: show error reason */}
       {metadata.status === 'failed' && metadata.error && (
         <div style={{
-          padding: '10px 16px',
-          fontSize: '12px',
-          color: '#991B1B',
-          background: '#FEE2E2',
-          borderTop: '1px solid #FECACA'
+          padding: '10px 16px', fontSize: '12px', color: '#991B1B',
+          background: '#FEE2E2', borderTop: '1px solid #FECACA'
         }}>
           Failed: {metadata.error}
-        </div>
-      )}
-
-      {metadata.status !== 'cancelled' && metadata.status !== 'failed' && (
-        <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '6px 16px 10px' }}>
-          <button
-            onClick={onToggle}
-            style={{ fontSize: '12px', fontWeight: 500, color: '#2E5BBA', background: 'none', border: 'none', cursor: 'pointer' }}
-          >
-            {isExpanded ? 'Close ↑' : 'Show full run ↓'}
-          </button>
         </div>
       )}
     </div>
@@ -779,12 +795,12 @@ function ConversationInner() {
     return () => observer.disconnect();
   }, []);
 
-  // Also scroll when activeRunId changes (new run started)
+  // Scroll to bottom of thread whenever messages change (no active run)
   useEffect(() => {
     if (threadRef.current) {
       threadRef.current.scrollTop = threadRef.current.scrollHeight;
     }
-  }, [activeRunId]);
+  }, [messages.length]);
 
   // Autorun (once)
   useEffect(() => {
@@ -971,7 +987,7 @@ function ConversationInner() {
 
         {/* Thread */}
         <div ref={threadRef} style={{
-          flex: 1, overflowY: 'auto', minHeight: 0, padding: '20px 24px 40px 24px',
+          flex: 1, overflowY: 'auto', minHeight: 0, padding: '20px 24px 48px 24px',
           display: 'flex', flexDirection: 'column', background: '#F7F6F3'
         }}>
           {threadElements}
