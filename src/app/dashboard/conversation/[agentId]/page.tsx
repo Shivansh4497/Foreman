@@ -702,7 +702,6 @@ function ConversationInner() {
   const [activeRunId, setActiveRunId] = useState<string | null>(null);
   const [inputValue, setInputValue] = useState('');
   const [isSending, setIsSending] = useState(false);
-
   const [showRunConfirm, setShowRunConfirm] = useState(false);
   const [autorunAttempted, setAutorunAttempted] = useState(false);
   const [expandedRuns, setExpandedRuns] = useState<Record<string, boolean>>({});
@@ -1000,7 +999,12 @@ function ConversationInner() {
       </div>
 
       <div style={{ height: '100vh', overflow: 'hidden', borderLeft: '1px solid #D4CFC6' }}>
-        <ProfilePanel agentId={agentId as string} onRunNow={() => handleRunNow()} onClose={() => {}} />
+        <ProfilePanel
+          agentId={agentId as string}
+          inline={true}
+          onClose={() => {}}
+          onRunNow={() => handleRunNow()}
+        />
       </div>
 
       {/* Concurrency Modal */}

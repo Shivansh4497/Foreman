@@ -63,10 +63,11 @@ export default function ProfilePanel({ agentId, onClose, inline, onRunNow }: Pro
   if (loading) {
     return (
       <div style={{
-        position: 'absolute',
-        inset: 0,
+        position: inline ? 'relative' : 'absolute',
+        inset: inline ? undefined : 0,
+        height: inline ? '100%' : undefined,
         background: 'var(--surface)',
-        zIndex: 50,
+        zIndex: inline ? 1 : 50,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -81,10 +82,11 @@ export default function ProfilePanel({ agentId, onClose, inline, onRunNow }: Pro
   if (error || !data) {
     return (
       <div style={{
-        position: 'absolute',
-        inset: 0,
+        position: inline ? 'relative' : 'absolute',
+        inset: inline ? undefined : 0,
+        height: inline ? '100%' : undefined,
         background: 'var(--surface)',
-        zIndex: 50,
+        zIndex: inline ? 1 : 50,
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
